@@ -9,7 +9,7 @@ export default function HomePage() {
       <SiteHeader />
       <section className="mx-auto grid max-w-6xl gap-12 px-5 py-24 lg:grid-cols-[1.1fr_.9fr] lg:items-center">
         <div>
-          <p className="mb-5 inline-flex rounded-full bg-[var(--brand-light)] px-3 py-1 text-sm font-semibold text-[#235347]">
+          <p className="mb-5 inline-flex rounded-full bg-[var(--brand-light)] px-3 py-1 text-sm font-semibold text-[#19d0a2]">
             Continu zicht op iedere leadroute
           </p>
           <h1 className="max-w-3xl text-5xl leading-[1.08] font-bold tracking-[-0.04em] text-slate-950 md:text-6xl">
@@ -22,16 +22,16 @@ export default function HomePage() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              className="rounded-xl bg-[#235347] px-5 py-3 font-semibold text-white hover:bg-[#193f36]"
-              href="/dashboard"
+              className="rounded-xl bg-[#19d0a2] px-5 py-3 font-semibold text-white hover:bg-[#193f36]"
+              href="/register"
             >
-              Bekijk de foundation
+              Account maken
             </Link>
             <Link
               className="rounded-xl border border-[var(--border)] bg-white px-5 py-3 font-semibold hover:bg-slate-50"
               href="/login"
             >
-              Naar inloggen
+              Inloggen
             </Link>
           </div>
         </div>
@@ -39,10 +39,10 @@ export default function HomePage() {
           <div className="flex items-center justify-between border-b border-[var(--border)] pb-5">
             <div>
               <p className="text-sm text-[var(--muted)]">Platformstatus</p>
-              <p className="mt-1 font-bold">Foundation gereed</p>
+              <p className="mt-1 font-bold">Authenticatie gereed</p>
             </div>
-            <span className="rounded-full bg-[var(--brand-light)] px-3 py-1 text-sm font-semibold text-[#235347]">
-              Fase 1
+            <span className="rounded-full bg-[var(--brand-light)] px-3 py-1 text-sm font-semibold text-[#19d0a2]">
+              Fase 2
             </span>
           </div>
           <div className="mt-5 space-y-3">

@@ -6,3 +6,1043 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum WebsiteStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum WebsiteDnsStatus {
+  RESOLVED
+  UNRESOLVED
+}
+
+enum MonitorType {
+  HTTP
+  BROWSER
+  FORM
+  AD_DESTINATION
+}
+
+enum BrowserViewport {
+  DESKTOP
+  MOBILE
+}
+
+enum MonitorStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum MonitorCheckStatus {
+  SUCCESS
+  DEGRADED
+  FAILURE
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+}
+
+enum MonitorCheckErrorType {
+  HTTP_4XX
+  HTTP_404
+  HTTP_401
+  HTTP_403
+  HTTP_429
+  HTTP_5XX
+  SOFT_404
+  TIMEOUT
+  DNS_ERROR
+  SSL_ERROR
+  CONNECTION_ERROR
+  REDIRECT_LOOP
+  TOO_MANY_REDIRECTS
+  UNSAFE_REDIRECT
+  UNSAFE_TARGET
+  INVALID_RESPONSE
+  UNKNOWN
+  BROWSER_NAVIGATION_ERROR
+  BROWSER_TIMEOUT
+  BROWSER_CRASH
+  PAGE_CRASH
+  JAVASCRIPT_ERROR
+  REQUIRED_ELEMENT_MISSING
+  CONTENT_NOT_RENDERED
+  UNSAFE_BROWSER_REQUEST
+  TOO_MANY_BROWSER_ERRORS
+  INVALID_MONITOR_CONFIGURATION
+  FORM_NOT_FOUND
+  FORM_FIELD_MISSING
+  FORM_FIELD_NOT_INTERACTABLE
+  SUBMIT_BUTTON_MISSING
+  SUBMIT_BUTTON_DISABLED
+  FORM_SUBMISSION_FAILED
+  FORM_SUBMISSION_TIMEOUT
+  FORM_VALIDATION_ERROR
+  FORM_SUCCESS_NOT_CONFIRMED
+  FORM_UNEXPECTED_NAVIGATION
+  UNSUPPORTED_CAPTCHA
+  UNMAPPED_REQUIRED_FIELD
+  FORM_OPTION_MISSING
+  AMBIGUOUS_SUBMISSION
+  UNSUPPORTED_FORM_TYPE
+  LEAD_RECEIPT_TIMEOUT
+}
+
+enum FormConfigurationStatus {
+  UNVERIFIED
+  VERIFIED
+  INVALID
+}
+
+enum FormSuccessMode {
+  ANY
+  SELECTOR
+  URL
+  TEXT
+}
+
+enum FormSubmissionState {
+  PREPARED
+  SUBMITTING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+  AMBIGUOUS
+}
+
+enum FormFieldRole {
+  NAME
+  EMAIL
+  PHONE
+  POSTCODE
+  HOUSE_NUMBER
+  CITY
+  MESSAGE
+  COMPANY
+  CUSTOM
+  LEADGUARD_SUBMISSION_ID
+}
+
+enum LeadReceiptMode {
+  NONE
+  INBOUND_EMAIL
+  RECEIPT_WEBHOOK
+}
+
+enum LeadReceiptStatus {
+  PENDING
+  RECEIVED
+  TIMED_OUT
+  FAILED
+}
+
+enum LeadReceiptMethod {
+  INBOUND_EMAIL
+  WEBHOOK
+}
+
+enum FormFieldControl {
+  TEXT
+  EMAIL
+  TEL
+  TEXTAREA
+  SELECT
+  CHECKBOX
+  RADIO
+}
+
+model User {
+  id                     String    @id @default(cuid())
+  name                   String
+  email                  String    @unique
+  emailVerified          DateTime?
+  passwordHash           String?
+  lastUsedOrganizationId String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  memberships           OrganizationMember[]
+  accounts              Account[]
+  consentedFormMonitors FormMonitorConfig[]  @relation("FormMonitorConsent")
+
+  @@index([lastUsedOrganizationId])
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members                     OrganizationMember[]
+  invites                     OrganizationInvite[]
+  websites                    Website[]
+  notificationChannels        NotificationChannel[]
+  notificationOutboxEvents    NotificationOutboxEvent[]
+  notificationDeliveries      NotificationDelivery[]
+  formTestProfiles            FormTestProfile[]
+  leadReceiptVerifications    LeadReceiptVerification[]
+  inboundEmailMessages        InboundEmailMessage[]
+  googleAdsConnection         GoogleAdsConnection?
+  googleAdsOAuthStates        GoogleAdsOAuthState[]
+  googleAdsCustomers          GoogleAdsCustomer[]
+  googleAdsDestinationTargets GoogleAdsDestinationTarget[]
+  googleAdsSyncRuns           GoogleAdsSyncRun[]
+  googleAdsIncidentImpacts    GoogleAdsIncidentImpact[]
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrganizationRole
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+/// A tenant-owned website origin. HTTP monitors hang off this record.
+model Website {
+  id              String           @id @default(cuid())
+  organizationId  String
+  name            String
+  url             String
+  normalizedUrl   String
+  hostname        String
+  scheme          String
+  port            Int
+  status          WebsiteStatus    @default(ACTIVE)
+  dnsStatus       WebsiteDnsStatus
+  lastValidatedAt DateTime
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  monitors                    Monitor[]
+  googleAdsDestinationTargets GoogleAdsDestinationTarget[]
+
+  @@unique([organizationId, normalizedUrl])
+  @@index([organizationId])
+  @@index([hostname])
+}
+
+/// A check target under a website origin. Status is scheduling config, not health.
+model Monitor {
+  id                                String        @id @default(cuid())
+  websiteId                         String
+  name                              String
+  type                              MonitorType   @default(HTTP)
+  url                               String
+  normalizedUrl                     String
+  status                            MonitorStatus @default(ACTIVE)
+  intervalSeconds                   Int
+  timeoutMs                         Int
+  consecutiveFailures               Int           @default(0)
+  consecutiveFailuresBeforeIncident Int           @default(2)
+  lastCheckedAt                     DateTime?
+  nextCheckAt                       DateTime
+  deletedAt                         DateTime?
+  createdAt                         DateTime      @default(now())
+  updatedAt                         DateTime      @updatedAt
+
+  website                    Website                     @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  checks                     MonitorCheck[]
+  incidents                  Incident[]
+  browserConfig              BrowserMonitorConfig?
+  formConfig                 FormMonitorConfig?
+  formSubmissionAttempts     FormSubmissionAttempt[]
+  leadReceiptVerifications   LeadReceiptVerification[]
+  adDestinationConfig        AdDestinationConfig?
+  googleAdsDestinationTarget GoogleAdsDestinationTarget? @relation("AdDestinationMonitor")
+  googleAdsIncidentImpacts   GoogleAdsIncidentImpact[]
+
+  @@index([websiteId])
+  @@index([status, nextCheckAt])
+  @@index([nextCheckAt])
+}
+
+/// Type-safe settings for BROWSER monitors. HTTP monitors have no row here.
+model BrowserMonitorConfig {
+  id                  String          @id @default(cuid())
+  monitorId           String          @unique
+  viewport            BrowserViewport @default(DESKTOP)
+  requiredSelector    String?
+  requiredElementName String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+}
+
+/// One executed HTTP check. Health is derived from these rows, not from Monitor.status.
+model MonitorCheck {
+  id                       String                 @id @default(cuid())
+  monitorId                String
+  jobId                    String?
+  startedAt                DateTime
+  finishedAt               DateTime
+  status                   MonitorCheckStatus
+  httpStatus               Int?
+  responseTimeMs           Int?
+  requestedUrl             String
+  finalUrl                 String?
+  redirectCount            Int                    @default(0)
+  resolvedIp               String?
+  errorType                MonitorCheckErrorType?
+  errorMessage             String?
+  soft404Score             Int?
+  soft404ClassifierVersion String?
+  soft404Signals           Json?
+  incidentProcessedAt      DateTime?
+  createdAt                DateTime               @default(now())
+
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  firstFailureIncidents   Incident[]               @relation("IncidentFirstFailure")
+  lastFailureIncidents    Incident[]               @relation("IncidentLastFailure")
+  recoveryIncidents       Incident[]               @relation("IncidentRecovery")
+  browserDetail           BrowserCheckDetail?
+  formDetail              FormCheckDetail?
+  formSubmissionAttempt   FormSubmissionAttempt?
+  leadReceiptVerification LeadReceiptVerification?
+
+  @@index([monitorId, createdAt])
+  @@index([monitorId, finishedAt])
+  @@index([createdAt])
+}
+
+/// Browser-only diagnostics for one MonitorCheck. Screenshot bytes live in object storage.
+model BrowserCheckDetail {
+  id                   String          @id @default(cuid())
+  checkId              String          @unique
+  viewport             BrowserViewport
+  navigationDurationMs Int?
+  totalDurationMs      Int?
+  javascriptErrorCount Int             @default(0)
+  pageErrorCount       Int             @default(0)
+  failedResourceCount  Int             @default(0)
+  requiredElementFound Boolean?
+  renderedTextLength   Int?
+  screenshotKey        String?
+  screenshotCapturedAt DateTime?
+  javascriptErrors     Json?
+  failedResources      Json?
+  dialogOccurred       Boolean         @default(false)
+  createdAt            DateTime        @default(now())
+
+  check MonitorCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+
+  @@index([screenshotCapturedAt])
+}
+
+/// Organization-owned reusable test identity for form submissions.
+model FormTestProfile {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  displayName    String
+  email          String
+  phone          String?
+  postcode       String?
+  city           String?
+  company        String?
+  messagePrefix  String?
+  plusAddressing Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  monitors     FormMonitorConfig[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+/// Type-safe settings for FORM monitors. HTTP/BROWSER monitors have no row here.
+model FormMonitorConfig {
+  id                         String                  @id @default(cuid())
+  monitorId                  String                  @unique
+  viewport                   BrowserViewport         @default(DESKTOP)
+  formSelector               String
+  submitSelector             String
+  cookieAcceptSelector       String?
+  fieldMappings              Json
+  successMode                FormSuccessMode         @default(ANY)
+  successSelector            String?
+  successUrlPattern          String?
+  successText                String?
+  submissionTimeoutMs        Int                     @default(20000)
+  testProfileId              String?
+  configurationStatus        FormConfigurationStatus @default(UNVERIFIED)
+  lastValidatedAt            DateTime?
+  lastValidationResult       Json?
+  consentedAt                DateTime?
+  consentedByUserId          String?
+  consentVersion             String?
+  receiptMode                LeadReceiptMode         @default(NONE)
+  receiptTimeoutMinutes      Int                     @default(15)
+  receiptWebhookSecretHash   String?                 @unique
+  receiptWebhookSecretPrefix String?
+  receiptVerifiedAt          DateTime?
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+
+  monitor         Monitor          @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  testProfile     FormTestProfile? @relation(fields: [testProfileId], references: [id], onDelete: SetNull)
+  consentedByUser User?            @relation("FormMonitorConsent", fields: [consentedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([testProfileId])
+  @@index([configurationStatus])
+}
+
+/// Side-effect-safe attempt record. Created before the submit click.
+model FormSubmissionAttempt {
+  id           String              @id @default(cuid())
+  monitorId    String
+  jobId        String              @unique
+  submissionId String
+  state        FormSubmissionState @default(PREPARED)
+  checkId      String?             @unique
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  monitor             Monitor                  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  check               MonitorCheck?            @relation(fields: [checkId], references: [id], onDelete: SetNull)
+  receiptVerification LeadReceiptVerification?
+
+  @@index([monitorId, createdAt])
+  @@index([state])
+  @@index([submissionId])
+}
+
+/// Form-only diagnostics for one MonitorCheck. No submitted field values.
+model FormCheckDetail {
+  id                     String              @id @default(cuid())
+  checkId                String              @unique
+  submissionId           String
+  submissionState        FormSubmissionState
+  successConfirmed       Boolean             @default(false)
+  submissionDurationMs   Int?
+  submitHttpStatus       Int?
+  submitEndpointPath     String?
+  submitMethod           String?
+  fieldsExpectedCount    Int                 @default(0)
+  fieldsFoundCount       Int                 @default(0)
+  formFound              Boolean             @default(false)
+  submitClicked          Boolean             @default(false)
+  captchaDetected        Boolean             @default(false)
+  validationErrors       Json?
+  unmappedRequiredFields Json?
+  screenshotKey          String?
+  screenshotCapturedAt   DateTime?
+  createdAt              DateTime            @default(now())
+
+  check MonitorCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+
+  @@index([screenshotCapturedAt])
+}
+
+/// Downstream proof that a confirmed form submission arrived at a configured receipt point.
+model LeadReceiptVerification {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  monitorId           String
+  monitorCheckId      String             @unique
+  submissionAttemptId String             @unique
+  submissionId        String             @unique
+  method              LeadReceiptMethod
+  status              LeadReceiptStatus  @default(PENDING)
+  expectedAt          DateTime
+  timeoutAt           DateTime
+  receivedAt          DateTime?
+  receiptLatencyMs    Int?
+  lateReceipt         Boolean            @default(false)
+  sourceType          LeadReceiptMethod?
+  providerMessageId   String?
+  senderDomain        String?
+  subjectPreview      String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  monitor      Monitor               @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  check        MonitorCheck          @relation(fields: [monitorCheckId], references: [id], onDelete: Cascade)
+  attempt      FormSubmissionAttempt @relation(fields: [submissionAttemptId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([monitorId, status])
+  @@index([status, timeoutAt])
+}
+
+/// Idempotency record for inbound email provider callbacks. No message bodies.
+model InboundEmailMessage {
+  id                String   @id @default(cuid())
+  organizationId    String?
+  provider          String
+  providerMessageId String
+  submissionId      String?
+  recipient         String?
+  senderDomain      String?
+  subjectPreview    String?
+  receivedAt        DateTime
+  createdAt         DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerMessageId])
+  @@index([submissionId])
+  @@index([organizationId])
+}
+
+/// A consecutive failure streak that represents one outage. Users cannot open or resolve these.
+model Incident {
+  id                 String                 @id @default(cuid())
+  monitorId          String
+  status             IncidentStatus
+  startedAt          DateTime
+  detectedAt         DateTime
+  resolvedAt         DateTime?
+  initialErrorType   MonitorCheckErrorType?
+  latestErrorType    MonitorCheckErrorType?
+  initialHttpStatus  Int?
+  latestHttpStatus   Int?
+  firstFailedCheckId String?
+  lastFailedCheckId  String?
+  recoveryCheckId    String?
+  failureCount       Int
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  monitor                 Monitor                  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  firstFailedCheck        MonitorCheck?            @relation("IncidentFirstFailure", fields: [firstFailedCheckId], references: [id], onDelete: SetNull)
+  lastFailedCheck         MonitorCheck?            @relation("IncidentLastFailure", fields: [lastFailedCheckId], references: [id], onDelete: SetNull)
+  recoveryCheck           MonitorCheck?            @relation("IncidentRecovery", fields: [recoveryCheckId], references: [id], onDelete: SetNull)
+  notificationDeliveries  NotificationDelivery[]
+  googleAdsIncidentImpact GoogleAdsIncidentImpact?
+
+  @@index([monitorId, status])
+  @@index([status, detectedAt])
+  @@index([detectedAt])
+  @@index([resolvedAt])
+  @@index([startedAt])
+}
+
+enum NotificationEventType {
+  INCIDENT_OPENED
+  INCIDENT_RESOLVED
+  NOTIFICATION_TEST
+}
+
+enum NotificationChannelType {
+  EMAIL
+  WEBHOOK
+}
+
+enum NotificationChannelStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum NotificationOutboxStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum NotificationErrorType {
+  AUTH_ERROR
+  CONNECTION_ERROR
+  TIMEOUT
+  RATE_LIMITED
+  RECIPIENT_REJECTED
+  UNSAFE_TARGET
+  PERMANENT_HTTP_ERROR
+  PROVIDER_ERROR
+  UNKNOWN
+}
+
+/// Organization-owned alert destination. Secrets are never returned in default queries.
+model NotificationChannel {
+  id               String                    @id @default(cuid())
+  organizationId   String
+  type             NotificationChannelType
+  name             String
+  status           NotificationChannelStatus @default(ACTIVE)
+  notifyOnOpened   Boolean                   @default(true)
+  notifyOnResolved Boolean                   @default(true)
+  emailAddress     String?
+  webhookUrl       String?
+  webhookSecret    String?
+  deletedAt        DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   NotificationDelivery[]
+
+  @@index([organizationId, status])
+  @@index([organizationId])
+}
+
+/// Transactional outbox: written in the same commit as the incident transition.
+model NotificationOutboxEvent {
+  id             String                   @id @default(cuid())
+  organizationId String
+  eventType      NotificationEventType
+  aggregateType  String
+  aggregateId    String
+  payload        Json
+  status         NotificationOutboxStatus @default(PENDING)
+  attempts       Int                      @default(0)
+  availableAt    DateTime                 @default(now())
+  processedAt    DateTime?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([aggregateId, eventType])
+  @@index([status, availableAt])
+  @@index([organizationId])
+}
+
+/// One attempted send to one channel for one event.
+model NotificationDelivery {
+  id               String                     @id @default(cuid())
+  organizationId   String
+  incidentId       String?
+  channelId        String
+  eventType        NotificationEventType
+  idempotencyKey   String                     @unique
+  status           NotificationDeliveryStatus @default(PENDING)
+  attemptCount     Int                        @default(0)
+  lastAttemptAt    DateTime?
+  nextAttemptAt    DateTime                   @default(now())
+  sentAt           DateTime?
+  lastErrorType    NotificationErrorType?
+  lastErrorMessage String?
+  websiteName      String?
+  monitorName      String?
+  monitorUrl       String?
+  channelName      String
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  incident     Incident?           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  channel      NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([incidentId])
+  @@index([channelId])
+  @@index([status, nextAttemptAt])
+}
+
+/// Invite records are reserved for a later mail-based invite flow.
+model OrganizationInvite {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  role           OrganizationRole
+  tokenHash      String           @unique
+  expiresAt      DateTime
+  invitedById    String?
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([email])
+}
+
+/// OAuth provider accounts. Unused in phase 2; kept for Google/Microsoft later.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+/// Magic-link / email verification tokens. Unused in phase 2.
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum GoogleAdsConnectionStatus {
+  CONNECTED
+  REAUTH_REQUIRED
+  ERROR
+  DISCONNECTED
+}
+
+enum GoogleAdsCustomerStatus {
+  ACTIVE
+  ACCESS_LOST
+  DISABLED
+}
+
+enum GoogleAdsDestinationApprovalStatus {
+  NEEDS_APPROVAL
+  APPROVED
+  IGNORED
+  UNSUPPORTED
+  BLOCKED
+}
+
+enum GoogleAdsDestinationUrlType {
+  FINAL_URL
+  MOBILE_FINAL_URL
+  OBSERVED_EXPANDED_URL
+}
+
+enum GoogleAdsSourceType {
+  AD_GROUP_AD
+  ASSET_GROUP
+  EXPANDED_LANDING_PAGE
+}
+
+enum GoogleAdsUrlProvenance {
+  CONFIGURED_FINAL_URL
+  CONFIGURED_MOBILE_URL
+  OBSERVED_EXPANDED_URL
+}
+
+enum GoogleAdsSyncRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+/// One Google Ads OAuth connection per organization. Refresh tokens are encrypted at rest.
+model GoogleAdsConnection {
+  id                    String                    @id @default(cuid())
+  organizationId        String                    @unique
+  status                GoogleAdsConnectionStatus @default(CONNECTED)
+  encryptedRefreshToken String?
+  credentialVersion     Int                       @default(1)
+  googleAccountEmail    String?
+  lastSuccessfulSyncAt  DateTime?
+  lastSyncAttemptAt     DateTime?
+  lastSyncErrorCode     String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customers    GoogleAdsCustomer[]
+
+  @@index([status])
+}
+
+/// Single-use OAuth state bound to organization and initiating user.
+model GoogleAdsOAuthState {
+  id             String    @id @default(cuid())
+  stateHash      String    @unique
+  organizationId String
+  userId         String
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// A Google Ads account visible through the connected OAuth user.
+model GoogleAdsCustomer {
+  id                String                  @id @default(cuid())
+  organizationId    String
+  connectionId      String
+  googleCustomerId  String
+  loginCustomerId   String?
+  descriptiveName   String
+  currencyCode      String?
+  timeZone          String?
+  isManager         Boolean                 @default(false)
+  selected          Boolean                 @default(false)
+  status            GoogleAdsCustomerStatus @default(ACTIVE)
+  lastSyncedAt      DateTime?
+  lastSyncAttemptAt DateTime?
+  syncGeneration    BigInt                  @default(0)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  organization    Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection      GoogleAdsConnection             @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  destinations    GoogleAdsDestinationTarget[]
+  references      GoogleAdsDestinationReference[]
+  syncRuns        GoogleAdsSyncRun[]
+  incidentImpacts GoogleAdsIncidentImpact[]
+
+  @@unique([connectionId, googleCustomerId])
+  @@index([organizationId])
+  @@index([connectionId])
+  @@index([status, selected, lastSyncedAt])
+}
+
+/// Unique destination URL discovered from Google Ads sources.
+model GoogleAdsDestinationTarget {
+  id                  String                             @id @default(cuid())
+  organizationId      String
+  googleAdsCustomerId String
+  sourceUrl           String
+  monitoringUrl       String?
+  normalizedUrl       String
+  urlType             GoogleAdsDestinationUrlType
+  websiteId           String?
+  monitorId           String?                            @unique
+  approvalStatus      GoogleAdsDestinationApprovalStatus
+  hasActiveSource     Boolean                            @default(false)
+  firstSeenAt         DateTime
+  lastSeenAt          DateTime
+  createdAt           DateTime                           @default(now())
+  updatedAt           DateTime                           @updatedAt
+
+  organization        Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer            GoogleAdsCustomer               @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+  website             Website?                        @relation(fields: [websiteId], references: [id], onDelete: SetNull)
+  monitor             Monitor?                        @relation("AdDestinationMonitor", fields: [monitorId], references: [id], onDelete: SetNull)
+  references          GoogleAdsDestinationReference[]
+  adDestinationConfig AdDestinationConfig?
+  incidentImpacts     GoogleAdsIncidentImpact[]
+
+  @@unique([googleAdsCustomerId, normalizedUrl])
+  @@index([organizationId])
+  @@index([googleAdsCustomerId])
+  @@index([normalizedUrl])
+  @@index([hasActiveSource])
+  @@index([approvalStatus])
+  @@index([websiteId])
+}
+
+/// One Google Ads campaign/ad/asset-group (or observed page) pointing at a destination.
+model GoogleAdsDestinationReference {
+  id                      String                 @id @default(cuid())
+  targetId                String
+  googleAdsCustomerId     String
+  sourceType              GoogleAdsSourceType
+  sourceEntityKey         String
+  provenance              GoogleAdsUrlProvenance
+  campaignId              String
+  campaignName            String
+  campaignStatus          String
+  advertisingChannelType  String?
+  adGroupId               String?
+  adGroupName             String?
+  adGroupStatus           String?
+  adId                    String?
+  adStatus                String?
+  adPrimaryStatus         String?
+  adType                  String?
+  assetGroupId            String?
+  assetGroupName          String?
+  assetGroupStatus        String?
+  assetGroupPrimaryStatus String?
+  landingPageSource       String?
+  sourceActive            Boolean                @default(false)
+  lastSyncGeneration      BigInt                 @default(0)
+  firstSeenAt             DateTime
+  lastSeenAt              DateTime
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  target   GoogleAdsDestinationTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  customer GoogleAdsCustomer          @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+
+  @@unique([targetId, sourceType, sourceEntityKey])
+  @@index([targetId])
+  @@index([googleAdsCustomerId])
+  @@index([sourceActive])
+  @@index([campaignId])
+  @@index([lastSyncGeneration])
+}
+
+model GoogleAdsSyncRun {
+  id                 String                 @id @default(cuid())
+  organizationId     String
+  customerId         String
+  status             GoogleAdsSyncRunStatus @default(RUNNING)
+  startedAt          DateTime
+  completedAt        DateTime?
+  itemsSeen          Int                    @default(0)
+  destinationsSeen   Int                    @default(0)
+  enabledReferences  Int                    @default(0)
+  uniqueDestinations Int                    @default(0)
+  matchedWebsites    Int                    @default(0)
+  needsApproval      Int                    @default(0)
+  unsupportedUrls    Int                    @default(0)
+  errorCode          String?
+  providerRequestId  String?
+  createdAt          DateTime               @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     GoogleAdsCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, startedAt])
+  @@index([organizationId])
+  @@index([status])
+}
+
+/// Integration-managed settings for AD_DESTINATION monitors.
+model AdDestinationConfig {
+  id                  String   @id @default(cuid())
+  monitorId           String   @unique
+  destinationTargetId String   @unique
+  userPaused          Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  monitor Monitor                    @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  target  GoogleAdsDestinationTarget @relation(fields: [destinationTargetId], references: [id], onDelete: Cascade)
+}
+
+enum GoogleAdsImpactStatus {
+  PENDING
+  AVAILABLE
+  PARTIAL
+  UNAVAILABLE
+  ERROR
+}
+
+enum GoogleAdsAttributionMethod {
+  SOURCE_HOURLY
+  SOURCE_HOURLY_PRORATED
+  DESTINATION_REPORTED_DAILY
+  MIXED
+  UNAVAILABLE
+}
+
+enum GoogleAdsImpactConfidence {
+  HIGH
+  MEDIUM
+  LOW
+  UNAVAILABLE
+}
+
+enum GoogleAdsImpactSourceCoverage {
+  ATTRIBUTED
+  AMBIGUOUS
+  UNSUPPORTED
+}
+
+/// Spend-at-risk snapshot for one AD_DESTINATION incident. Unique per incident.
+model GoogleAdsIncidentImpact {
+  id                          String                     @id @default(cuid())
+  organizationId              String
+  incidentId                  String                     @unique
+  monitorId                   String
+  destinationTargetId         String
+  googleAdsCustomerId         String
+  status                      GoogleAdsImpactStatus      @default(PENDING)
+  attributionMethod           GoogleAdsAttributionMethod @default(UNAVAILABLE)
+  confidence                  GoogleAdsImpactConfidence  @default(UNAVAILABLE)
+  isProvisional               Boolean                    @default(true)
+  dataIncomplete              Boolean                    @default(false)
+  currencyCode                String
+  windowStartedAt             DateTime
+  windowEndedAt               DateTime?
+  windowCostMicros            BigInt?
+  windowClicksMilli           BigInt?
+  windowClicksEstimated       Boolean                    @default(false)
+  windowImpressions           BigInt?
+  destinationDailyCostMicros  BigInt?
+  destinationDailyClicks      BigInt?
+  destinationDailyImpressions BigInt?
+  destinationDailyFrom        String?
+  destinationDailyTo          String?
+  totalRelevantSources        Int                        @default(0)
+  attributedSources           Int                        @default(0)
+  ambiguousSources            Int                        @default(0)
+  dataFrom                    DateTime?
+  dataThrough                 DateTime?
+  lastRefreshedAt             DateTime?
+  lastManualRefreshAt         DateTime?
+  nextRefreshAt               DateTime?
+  finalizedAt                 DateTime?
+  reconciledAt                DateTime?
+  diagnosticCode              String?
+  createdAt                   DateTime                   @default(now())
+  updatedAt                   DateTime                   @updatedAt
+
+  organization Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  incident     Incident                        @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  monitor      Monitor                         @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  target       GoogleAdsDestinationTarget      @relation(fields: [destinationTargetId], references: [id], onDelete: Cascade)
+  customer     GoogleAdsCustomer               @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+  sources      GoogleAdsIncidentImpactSource[]
+
+  @@index([googleAdsCustomerId])
+  @@index([status])
+  @@index([lastRefreshedAt])
+  @@index([nextRefreshAt])
+  @@index([organizationId])
+  @@index([monitorId])
+}
+
+model GoogleAdsIncidentImpactSource {
+  id             String                        @id @default(cuid())
+  impactId       String
+  sourceType     GoogleAdsSourceType
+  sourceEntityId String
+  campaignId     String
+  campaignName   String
+  adGroupId      String?
+  adId           String?
+  assetGroupId   String?
+  coverageStatus GoogleAdsImpactSourceCoverage
+  method         GoogleAdsAttributionMethod
+  confidence     GoogleAdsImpactConfidence
+  costMicros     BigInt?
+  clicksMilli    BigInt?
+  impressions    BigInt?
+  createdAt      DateTime                      @default(now())
+
+  impact GoogleAdsIncidentImpact @relation(fields: [impactId], references: [id], onDelete: Cascade)
+
+  @@unique([impactId, sourceType, sourceEntityId])
+  @@index([impactId])
+}

@@ -11,6 +11,17 @@ function createDatabaseClient(): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
-export const database = globalDatabase.database ?? createDatabaseClient();
+function getDatabase(): PrismaClient {
+  const existing = globalDatabase.database;
+  // Next.js HMR can keep a PrismaClient created before the last generate.
+  if (existing && "notificationChannel" in existing) {
+    return existing;
+  }
+  const created = createDatabaseClient();
+  if (process.env.NODE_ENV !== "production") {
+    globalDatabase.database = created;
+  }
+  return created;
+}
 
-if (process.env.NODE_ENV !== "production") globalDatabase.database = database;
+export const database = getDatabase();

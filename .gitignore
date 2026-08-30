@@ -16,6 +16,9 @@
 .env.*.local
 !.env.example
 
+# local screenshot/artifact storage
+/.leadguard-artifacts
+
 # generated
 /src/generated/prisma
 

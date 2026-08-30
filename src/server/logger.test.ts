@@ -11,10 +11,21 @@ describe("logger", () => {
     createLogger("test").info("message", {
       jobId: "job-1",
       password: "unsafe",
+      refreshToken: "1//secret",
+      developerToken: "dev-token",
     });
     expect(output).toHaveBeenCalledWith(
       expect.stringContaining('"password":"[REDACTED]"'),
     );
+    expect(output).toHaveBeenCalledWith(
+      expect.stringContaining('"refreshToken":"[REDACTED]"'),
+    );
+    expect(output).toHaveBeenCalledWith(
+      expect.stringContaining('"developerToken":"[REDACTED]"'),
+    );
     expect(output).toHaveBeenCalledWith(expect.not.stringContaining("unsafe"));
+    expect(output).toHaveBeenCalledWith(
+      expect.not.stringContaining("1//secret"),
+    );
   });
 });

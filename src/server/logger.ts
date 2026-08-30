@@ -9,7 +9,8 @@ const severity: Record<LogLevel, number> = {
   warn: 30,
   error: 40,
 };
-const secretKey = /authorization|cookie|password|secret|token|database_url/i;
+const secretKey =
+  /authorization|cookie|password|secret|token|database_url|smtp|emailaddress|webhookurl|encrypt|credential|developer/i;
 
 function sanitize(context: LogContext): LogContext {
   return Object.fromEntries(

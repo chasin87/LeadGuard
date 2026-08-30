@@ -14,10 +14,10 @@ export function SiteHeader() {
             Inloggen
           </Link>
           <Link
-            className="rounded-lg bg-[#235347] px-4 py-2 text-sm font-semibold text-white hover:bg-[#193f36]"
-            href="/dashboard"
+            className="rounded-lg bg-[#19d0a2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#193f36]"
+            href="/register"
           >
-            Bekijk dashboard
+            Account maken
           </Link>
         </nav>
       </div>

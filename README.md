@@ -1,6 +1,6 @@
 # LeadGuard
 
-LeadGuard wordt een multi-tenant SaaS-platform dat bedrijven beschermt tegen verspild advertentiebudget en gemiste leads. Deze repository bevat uitsluitend **fase 1: de production-oriented projectfoundation**. Er is nog geen authenticatie, klantdata of monitoringengine.
+LeadGuard wordt een multi-tenant SaaS-platform dat bedrijven beschermt tegen verspild advertentiebudget en gemiste leads. Deze repository bevat **fase 12: Google Ads Spend-at-Risk & Incident Impact**. Revenue attribution, GCLID-capture, CRM en billing horen bij latere fasen.
 
 ## Vereisten
 
@@ -12,15 +12,35 @@ LeadGuard wordt een multi-tenant SaaS-platform dat bedrijven beschermt tegen ver
 
 ```bash
 npm install
-cp .env.example .env
-# Pas DATABASE_URL in .env aan voor je eigen PostgreSQL-installatie.
+cp -n .env.example .env
+# Als .env nieuw is: pas DATABASE_URL aan en zet AUTH_SECRET:
+# openssl rand -base64 32
 npm run db:generate
 npm run db:validate
+npm run db:migrate
 npm run db:check
-npm run dev
 ```
 
-Open daarna <http://localhost:3000>. `GET /api/health` retourneert HTTP 200 als de applicatie de database kan bereiken en HTTP 503 als dat niet lukt.
+Zes processen (aparte terminals):
+
+```bash
+npm run dev                   # web UI — http://localhost:3000
+npm run scheduler             # plant due monitors en Google Ads syncs
+npm run worker                # voert HTTP- en AD_DESTINATION-checks uit
+npm run worker:browser        # Playwright browser- én form-checks
+npm run worker:notifications  # outbox dispatcher + email/webhook delivery
+npm run worker:google-ads     # Google Ads destination sync + incident impact (read-only)
+```
+
+Lokaal gebruikt Google Ads standaard de fake provider. Productie vereist `GOOGLE_ADS_PROVIDER=google`, OAuth-client, developer token en `CREDENTIAL_ENCRYPTION_KEY`. Zie [Google Ads](docs/GOOGLE_ADS.md).
+
+Zonder scheduler/worker kun je monitors beheren, maar er worden geen automatische checks uitgevoerd. **Run check now** enqueue’t alleen een job; de bijbehorende worker moet draaien om een resultaat te zien. Browserchecks starten nooit in de Next.js-request. Zonder notification-worker openen incidents nog steeds; alerts blijven in de outbox tot de worker draait.
+
+Installeer Chromium eenmalig voor zowel e2e als de browser worker:
+
+```bash
+npx playwright install chromium
+```
 
 ## Kwaliteitscontroles
 
@@ -36,19 +56,17 @@ npm run test:e2e
 
 ## Projectindeling
 
-- `src/app` — Next.js App Router, pagina's en API-routes
-- `src/components` — gedeelde presentational components
-- `src/features` — toekomstige featuremodules met eigen domeinlogica
-- `src/server` — server-only infrastructuur, database en logging
-- `src/workers` — toekomstige onafhankelijk uitvoerbare workers
-- `src/jobs` — toekomstige queue- en jobcontracten
-- `src/integrations` — toekomstige externe providers
-- `prisma` — Prisma-schema
-- `tests/e2e` — Playwright end-to-end tests
-- `docs` — architectuur-, security- en ontwikkeldocumentatie
+- `src/app` — Next.js App Router
+- `src/server/monitoring` — HTTP engine, classificatie, scheduler, worker-runner
+- `src/server/notifications` — outbox, channels, email/webhook delivery
+- `src/jobs` — pg-boss queue
+- `src/workers` — proces-entries voor scheduler en workers
+- `docs/FORM_MONITORING.md` — echte lead submissions, consent, retry-safety
+- `docs/LEAD_RECEIPT_VERIFICATION.md` — downstream e-mail/webhook-ontvangst
+- `docs/BROWSER_MONITORING.md` — Playwright, SSRF, screenshots, isolation
+- `docs/MONITORING.md` — scheduler, queue, SSRF, redirects
+- `docs/SOFT404.md` — heuristische 200-foutpagina detectie
+- `docs/INCIDENTS.md` — failure threshold, lifecycle, health
+- `docs/NOTIFICATIONS.md` — outbox, channels, retries, signing
 
-Zie [Development](docs/DEVELOPMENT.md) voor PostgreSQL-instructies zonder Docker en [Architecture](docs/ARCHITECTURE.md) voor de vastgelegde grenzen.
-
-## Huidige scope
-
-De login en het dashboard zijn expliciete foundation-previews. Ze simuleren geen sessie of monitoringdata. Auth.js, het multi-tenant datamodel en autorisatie behoren tot fase 2 en worden pas na een expliciete vervolgopdracht gebouwd.
+Zie [Development](docs/DEVELOPMENT.md), [Architecture](docs/ARCHITECTURE.md), [Security](docs/SECURITY.md), [Monitoring](docs/MONITORING.md), [Browser monitoring](docs/BROWSER_MONITORING.md), [Form monitoring](docs/FORM_MONITORING.md), [Lead receipt verification](docs/LEAD_RECEIPT_VERIFICATION.md), [Soft-404](docs/SOFT404.md), [Incidents](docs/INCIDENTS.md) en [Notifications](docs/NOTIFICATIONS.md).
