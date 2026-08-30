@@ -19,6 +19,12 @@
 # generated
 /src/generated/prisma
 
+# local Prisma agent skills
+.agents
+.claude
+.windsurf
+skills-lock.json
+
 # editor and OS
 .DS_Store
 *.log

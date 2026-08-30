@@ -5,7 +5,9 @@ import { getServerEnvironment } from "@/lib/env";
 const globalDatabase = globalThis as unknown as { database?: PrismaClient };
 
 function createDatabaseClient(): PrismaClient {
-  const adapter = new PrismaPg({ connectionString: getServerEnvironment().DATABASE_URL });
+  const adapter = new PrismaPg({
+    connectionString: getServerEnvironment().DATABASE_URL,
+  });
   return new PrismaClient({ adapter });
 }
 

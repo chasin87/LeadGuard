@@ -28,10 +28,10 @@ Start de webapp met `npm run dev`. Voer vóór een commit ten minste formatter, 
 
 ## Environment
 
-| Variabele | Vereist | Omschrijving |
-| --- | --- | --- |
-| `DATABASE_URL` | Ja | PostgreSQL connection string; alleen server-side |
-| `APP_URL` | Nee | Publieke applicatie-origin, standaard lokaal |
-| `LOG_LEVEL` | Nee | `debug`, `info`, `warn` of `error` |
+| Variabele      | Vereist | Omschrijving                                     |
+| -------------- | ------- | ------------------------------------------------ |
+| `DATABASE_URL` | Ja      | PostgreSQL connection string; alleen server-side |
+| `APP_URL`      | Nee     | Publieke applicatie-origin, standaard lokaal     |
+| `LOG_LEVEL`    | Nee     | `debug`, `info`, `warn` of `error`               |
 
 Wijzig `.env.example` wanneer een nieuwe verplichte variabele wordt toegevoegd, zonder echte waarden op te nemen.

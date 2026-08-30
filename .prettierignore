@@ -1,4 +1,7 @@
 .next
+.agents
+.claude
+.windsurf
 coverage
 node_modules
 playwright-report
