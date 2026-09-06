@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { AccessDenied } from "@/components/access-denied";
 import { AppShell } from "@/components/app-shell";
+import { BillingStatusBanner } from "@/components/billing-status-banner";
+import { hasOrganizationPermission } from "@/server/authorization/permissions";
+import { loadEntitlements } from "@/server/billing/limits";
 import { listUserMemberships } from "@/server/auth/service";
 import {
   loadOrganizationAccess,
@@ -30,10 +33,15 @@ export default async function OrganizationLayout({
   }
 
   await rememberLastOrganization(user.id, access.context.organization.id);
-  const [memberships, openIncidentCount] = await Promise.all([
+  const [memberships, openIncidentCount, entitlements] = await Promise.all([
     listUserMemberships(user.id),
     countOpenIncidents(user.id, organizationSlug),
+    loadEntitlements(access.context.organization.id),
   ]);
+  const canManageBilling = hasOrganizationPermission(
+    access.context.membership.role,
+    "billing:manage",
+  );
 
   return (
     <AppShell
@@ -46,6 +54,11 @@ export default async function OrganizationLayout({
       }))}
       openIncidentCount={openIncidentCount}
     >
+      <BillingStatusBanner
+        organizationSlug={organizationSlug}
+        entitlements={entitlements}
+        canManage={canManageBilling}
+      />
       {children}
     </AppShell>
   );

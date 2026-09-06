@@ -2,7 +2,7 @@ import { database } from "@/server/database";
 import { DomainError } from "@/server/authorization/errors";
 import { requireOrganizationRole } from "@/server/authorization/organization";
 import { consumeRateLimit } from "@/server/auth/rate-limit";
-import { createLogger } from "@/server/logger";
+import { PlanLimitError, requireFeature } from "@/server/billing/limits";
 import { suggestedWebsiteName } from "@/lib/urls/normalize-url";
 import { createWebsite } from "@/server/websites/service";
 import { enqueueGoogleAdsImpact, enqueueGoogleAdsSync } from "@/jobs/queue";
@@ -27,6 +27,7 @@ import {
   reconcileDestinationMonitor,
 } from "@/server/google-ads/sync";
 import type { DnsResolver } from "@/server/security/ssrf";
+import { createLogger } from "@/server/logger";
 
 const logger = createLogger("google-ads");
 
@@ -290,6 +291,17 @@ export async function selectGoogleAdsCustomers(input: {
   }
   if (accessible.some((item) => item.isManager)) {
     throw new DomainError(googleAdsUserErrors.managerNotSelectable);
+  }
+  const entitlements = await requireFeature(
+    organization.id,
+    "googleAdsDestinationMonitoring",
+  );
+  if (requested.length > entitlements.limits.maxGoogleAdsCustomers) {
+    throw new PlanLimitError(
+      "googleAdsCustomers",
+      requested.length,
+      entitlements.limits.maxGoogleAdsCustomers,
+    );
   }
 
   await database.$transaction([

@@ -1,50 +1,29 @@
-import { expect, test } from "@playwright/test";
+import {
+  expect,
+  openIsolatedPage,
+  registerOrganization,
+  test,
+  websiteDetailUrl,
+} from "./fixtures";
 
-function uniqueEmail(prefix: string) {
-  const safePrefix = prefix.toLowerCase().replace(/[^a-z0-9]+/g, ".");
-  return `${safePrefix}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@example.com`;
-}
-
-const password = "CorrectHorse1";
-const websiteDetailUrl = /\/app\/[^/]+\/websites\/(?!new(?:\/|$))[^/]+$/;
-
-async function addWebsite(
-  page: import("@playwright/test").Page,
-  name: string,
-  url: string,
-) {
+async function addWebsite(page: import("@playwright/test").Page, name: string) {
   await page.getByLabel("Website name").fill(name);
-  await page.getByLabel("Website URL").fill(url);
+  await page.getByLabel("Website URL").fill("example.com");
   await page.getByRole("button", { name: "Add website" }).click();
   await expect(page).toHaveURL(websiteDetailUrl, { timeout: 20_000 });
   await expect(page.getByRole("heading", { name })).toBeVisible();
 }
 
-async function registerOrganization(
-  page: import("@playwright/test").Page,
-  name: string,
-  organizationName: string,
-) {
-  const email = uniqueEmail(name);
-  await page.goto("/register");
-  await page.getByLabel("Naam").fill(name);
-  await page.getByLabel("E-mailadres").fill(email);
-  await page.getByLabel("Wachtwoord").fill(password);
-  await page.getByRole("button", { name: "Account aanmaken" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Maak je organisatie" }),
-  ).toBeVisible({ timeout: 15_000 });
-  await page.getByLabel("Bedrijfsnaam").fill(organizationName);
-  await page.getByRole("button", { name: "Organisatie maken" }).click();
-  await expect(page).toHaveURL(/\/app\/.+\/dashboard$/);
-  return { email, organizationUrl: page.url() };
-}
-
 test("happy path: add, edit, disable, enable, and delete a website", async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(90_000);
-  await registerOrganization(page, "Website Owner", "Website Company");
+  await registerOrganization(
+    page,
+    "Website Owner",
+    "Website Company",
+    testInfo,
+  );
 
   await expect(
     page.getByRole("heading", { name: "No websites yet" }),
@@ -52,7 +31,7 @@ test("happy path: add, edit, disable, enable, and delete a website", async ({
   await page.getByRole("link", { name: "Websites" }).click();
   await expect(page.getByRole("heading", { name: "Websites" })).toBeVisible();
   await page.getByRole("link", { name: "Add website" }).first().click();
-  await addWebsite(page, "Example", "example.com");
+  await addWebsite(page, "Example");
   await expect(page.getByText("https://example.com")).toBeVisible();
   await expect(page.getByText("Active").first()).toBeVisible();
   await expect(page.getByText("No monitors yet")).toBeVisible();
@@ -72,9 +51,9 @@ test("happy path: add, edit, disable, enable, and delete a website", async ({
   await expect(page.getByText("Disabled").first()).toBeVisible();
   await page.getByRole("link", { name: "View website" }).click();
   await expect(page.getByText("Disabled").first()).toBeVisible();
-  await page.getByRole("button", { name: "Enable" }).click();
+  await page.getByRole("button", { name: "Enable", exact: true }).click();
   await expect(page.getByText("Active").first()).toBeVisible();
-  await page.getByRole("button", { name: "Disable" }).click();
+  await page.getByRole("button", { name: "Disable", exact: true }).click();
   await expect(page.getByText("Disabled").first()).toBeVisible();
 
   await page.getByRole("link", { name: "Website settings" }).click();
@@ -88,56 +67,56 @@ test("happy path: add, edit, disable, enable, and delete a website", async ({
 
 test("user A cannot open organization B's website by ID", async ({
   browser,
-}) => {
+}, testInfo) => {
   test.setTimeout(120_000);
-  const contextA = await browser.newContext();
-  const pageA = await contextA.newPage();
-  const tenantA = await registerOrganization(
-    pageA,
+  const tenantA = await openIsolatedPage(browser, testInfo);
+  const createdA = await registerOrganization(
+    tenantA.page,
     "Alice Web",
     "Organization Alpha Web",
+    testInfo,
   );
-  const orgASlug = new URL(tenantA.organizationUrl).pathname.split("/")[2];
+  const orgASlug = new URL(createdA.organizationUrl).pathname.split("/")[2];
   if (!orgASlug) {
     throw new Error("Kon de organisatie-slug van tenant A niet bepalen.");
   }
 
-  await pageA.goto(`/app/${orgASlug}/websites/new`);
-  await addWebsite(pageA, "Alpha Public Site", "example.com");
-  const websiteAUrl = pageA.url();
+  await tenantA.page.goto(`/app/${orgASlug}/websites/new`);
+  await addWebsite(tenantA.page, "Alpha Public Site");
+  const websiteAUrl = tenantA.page.url();
 
-  const contextB = await browser.newContext();
-  const pageB = await contextB.newPage();
-  const tenantB = await registerOrganization(
-    pageB,
+  const tenantB = await openIsolatedPage(browser, testInfo);
+  const createdB = await registerOrganization(
+    tenantB.page,
     "Bob Web",
     "Organization Beta Web",
+    testInfo,
   );
-  const orgBSlug = new URL(tenantB.organizationUrl).pathname.split("/")[2];
+  const orgBSlug = new URL(createdB.organizationUrl).pathname.split("/")[2];
   if (!orgBSlug) {
     throw new Error("Kon de organisatie-slug van tenant B niet bepalen.");
   }
 
-  await pageB.goto(`/app/${orgBSlug}/websites/new`);
-  await addWebsite(pageB, "Secret Beta Site", "www.example.com");
-  const websiteBId = new URL(pageB.url()).pathname.split("/").at(-1);
+  await tenantB.page.goto(`/app/${orgBSlug}/websites/new`);
+  await addWebsite(tenantB.page, "Secret Beta Site");
+  const websiteBId = new URL(tenantB.page.url()).pathname.split("/").at(-1);
   if (!websiteBId) {
     throw new Error("Kon het website-id van tenant B niet bepalen.");
   }
 
-  await pageB.goto(websiteAUrl);
+  await tenantB.page.goto(websiteAUrl);
   await expect(
-    pageB.getByRole("heading", { name: "Geen toegang" }),
+    tenantB.page.getByRole("heading", { name: "Geen toegang" }),
   ).toBeVisible();
-  await expect(pageB.getByText("403")).toBeVisible();
-  await expect(pageB.getByText("Alpha Public Site")).toHaveCount(0);
+  await expect(tenantB.page.getByText("403")).toBeVisible();
+  await expect(tenantB.page.getByText("Alpha Public Site")).toHaveCount(0);
 
-  await pageA.goto(`/app/${orgASlug}/websites/${websiteBId}`);
+  await tenantA.page.goto(`/app/${orgASlug}/websites/${websiteBId}`);
   await expect(
-    pageA.getByRole("heading", { name: "Website not found" }),
+    tenantA.page.getByRole("heading", { name: "Website not found" }),
   ).toBeVisible();
-  await expect(pageA.getByText("Secret Beta Site")).toHaveCount(0);
+  await expect(tenantA.page.getByText("Secret Beta Site")).toHaveCount(0);
 
-  await contextA.close();
-  await contextB.close();
+  await tenantA.context.close();
+  await tenantB.context.close();
 });

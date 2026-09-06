@@ -2,7 +2,9 @@ import { config } from "dotenv";
 import { executeMonitorJob } from "@/server/monitoring/runner";
 import { disconnectMonitorLocks } from "@/server/monitoring/runner";
 
-config({ path: ".env" });
+if (!process.env.DATABASE_URL) {
+  config({ path: process.env.E2E_ENV_FILE ?? ".env" });
+}
 
 const publicIp = "93.184.216.34";
 

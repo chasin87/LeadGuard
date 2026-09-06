@@ -28,4 +28,45 @@ describe("logger", () => {
       expect.not.stringContaining("1//secret"),
     );
   });
+
+  it("redacts raw click IDs but keeps presence flags", () => {
+    const output = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    createLogger("test").info("tracking.attribution.created", {
+      hasGclid: true,
+      gclid: "SECRETCLICK",
+    });
+    expect(output).toHaveBeenCalledWith(
+      expect.stringContaining('"hasGclid":true'),
+    );
+    expect(output).toHaveBeenCalledWith(
+      expect.not.stringContaining("SECRETCLICK"),
+    );
+    expect(output).toHaveBeenCalledWith(
+      expect.stringContaining('"gclid":"[REDACTED]"'),
+    );
+  });
+
+  it("redacts revenue amounts but keeps hasRevenue and currency", () => {
+    const output = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    createLogger("test").info("lead.revenue.changed", {
+      hasRevenue: true,
+      currency: "EUR",
+      revenue: "4500.00",
+      amountMinor: "450000",
+    });
+    expect(output).toHaveBeenCalledWith(
+      expect.stringContaining('"hasRevenue":true'),
+    );
+    expect(output).toHaveBeenCalledWith(
+      expect.stringContaining('"currency":"EUR"'),
+    );
+    expect(output).toHaveBeenCalledWith(
+      expect.stringContaining('"revenue":"[REDACTED]"'),
+    );
+    expect(output).toHaveBeenCalledWith(expect.not.stringContaining("4500.00"));
+  });
 });

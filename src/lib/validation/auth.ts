@@ -22,5 +22,14 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Wachtwoord is verplicht.").max(128),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().pipe(z.email("Voer een geldig e-mailadres in.")),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(16, "Ongeldige herstelcode."),
+  password: passwordSchema,
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;

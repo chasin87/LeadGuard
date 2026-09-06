@@ -1,6 +1,10 @@
 import type {
   GoogleAdsAccount,
   GoogleAdsAuthClient,
+  GoogleAdsCampaignDailyPerformanceRow,
+  GoogleAdsClickViewRow,
+  GoogleAdsConversionActionRow,
+  GoogleAdsCustomerDailyPerformanceRow,
   GoogleAdsDailyLandingPageMetric,
   GoogleAdsHourlySourceMetric,
   GoogleAdsObservedLandingPage,
@@ -20,9 +24,15 @@ export type FakeGoogleAdsWorld = {
   hourlyAssetGroupMetrics: Record<string, GoogleAdsHourlySourceMetric[]>;
   dailyLandingPages: Record<string, GoogleAdsDailyLandingPageMetric[]>;
   dailyExpandedLandingPages: Record<string, GoogleAdsDailyLandingPageMetric[]>;
+  conversionActions: Record<string, GoogleAdsConversionActionRow[]>;
+  customerDaily: Record<string, GoogleAdsCustomerDailyPerformanceRow[]>;
+  campaignDaily: Record<string, GoogleAdsCampaignDailyPerformanceRow[]>;
+  clickViews: Record<string, GoogleAdsClickViewRow[]>;
   failSyncFor: string[];
   failHalfwayFor: string[];
   failMetricsFor: string[];
+  failAnalyticsFor: string[];
+  failClickViewFor: string[];
   revoked: boolean;
   accessLostCustomerIds: string[];
 };
@@ -58,6 +68,19 @@ const defaultWorld = (): FakeGoogleAdsWorld => ({
       loginCustomerId: "1111111111",
     },
   ],
+  conversionActions: {
+    "2222222222": [
+      {
+        conversionActionId: "9876543210",
+        name: "Qualified Lead - Won",
+        status: "ENABLED",
+        type: "UPLOAD_CLICKS",
+        category: "QUALIFIED_LEAD",
+        countingType: "ONE_PER_CLICK",
+        clickThroughLookbackWindowDays: 90,
+      },
+    ],
+  },
   standardAds: {
     "2222222222": [
       {
@@ -227,6 +250,11 @@ const defaultWorld = (): FakeGoogleAdsWorld => ({
     ],
   },
   dailyExpandedLandingPages: {},
+  customerDaily: {},
+  campaignDaily: {},
+  clickViews: {},
+  failAnalyticsFor: [],
+  failClickViewFor: [],
   revoked: false,
   accessLostCustomerIds: [],
 });
@@ -250,6 +278,11 @@ export function resetFakeGoogleAdsWorld(
   if (patch.dailyExpandedLandingPages) {
     world.dailyExpandedLandingPages = patch.dailyExpandedLandingPages;
   }
+  if (patch.conversionActions)
+    world.conversionActions = patch.conversionActions;
+  if (patch.customerDaily) world.customerDaily = patch.customerDaily;
+  if (patch.campaignDaily) world.campaignDaily = patch.campaignDaily;
+  if (patch.clickViews) world.clickViews = patch.clickViews;
   return world;
 }
 
@@ -361,32 +394,94 @@ export function createFakeGoogleAdsReadProvider(): GoogleAdsReadProvider {
         (row) => row.date >= range.fromDate && row.date <= range.toDate,
       );
     },
+    async listConversionActions(_session, googleCustomerId) {
+      return [...(world.conversionActions[googleCustomerId] ?? [])];
+    },
+    async getCustomerDailyPerformance(_session, googleCustomerId, range) {
+      if (
+        world.failAnalyticsFor.includes(googleCustomerId) ||
+        world.failMetricsFor.includes(googleCustomerId)
+      ) {
+        throw new Error("GOOGLE_ADS_UNAVAILABLE");
+      }
+      return (world.customerDaily[googleCustomerId] ?? []).filter(
+        (row) => row.date >= range.fromDate && row.date <= range.toDate,
+      );
+    },
+    async getCampaignDailyPerformance(_session, googleCustomerId, range) {
+      if (
+        world.failAnalyticsFor.includes(googleCustomerId) ||
+        world.failMetricsFor.includes(googleCustomerId)
+      ) {
+        throw new Error("GOOGLE_ADS_UNAVAILABLE");
+      }
+      return (world.campaignDaily[googleCustomerId] ?? []).filter(
+        (row) => row.date >= range.fromDate && row.date <= range.toDate,
+      );
+    },
+    async getClickViews(_session, googleCustomerId, input) {
+      if (world.failClickViewFor.includes(googleCustomerId)) {
+        throw new Error("GOOGLE_ADS_UNAVAILABLE");
+      }
+      const wanted = new Set(input.gclids);
+      return (world.clickViews[googleCustomerId] ?? []).filter(
+        (row) => row.date === input.date && wanted.has(row.gclid),
+      );
+    },
   };
 }
 
 export function createFakeGoogleAdsAuthClient(): GoogleAdsAuthClient {
   return {
     createAuthorizationUrl(input) {
-      return `/api/integrations/google-ads/fake/consent?state=${encodeURIComponent(input.state)}`;
+      const intent = input.intent ?? "connect";
+      return `/api/integrations/google-ads/fake/consent?state=${encodeURIComponent(input.state)}&intent=${encodeURIComponent(intent)}`;
     },
     async exchangeAuthorizationCode(input): Promise<GoogleAdsOAuthTokenSet> {
-      if (input.code !== "fake-google-ads-code") {
+      if (
+        input.code !== "fake-google-ads-code" &&
+        input.code !== "fake-google-ads-datamanager-code" &&
+        input.code !== "fake-google-ads-deny-datamanager-code"
+      ) {
         throw new Error("invalid_grant");
       }
+      const ads = "https://www.googleapis.com/auth/adwords";
+      const dataManager = "https://www.googleapis.com/auth/datamanager";
+      const scope =
+        input.code === "fake-google-ads-datamanager-code"
+          ? `${ads} ${dataManager}`
+          : ads;
       return {
-        accessToken: "fake-access-token",
-        refreshToken: "fake-refresh-token",
+        accessToken:
+          input.code === "fake-google-ads-datamanager-code"
+            ? "fake-access-token-datamanager"
+            : "fake-access-token",
+        refreshToken:
+          input.code === "fake-google-ads-datamanager-code"
+            ? "fake-refresh-token-datamanager"
+            : "fake-refresh-token",
         expiresIn: 3600,
         email: "ads-user@example.com",
+        scope,
       };
     },
     async refreshAccessToken(input) {
-      if (world.revoked || input.refreshToken !== "fake-refresh-token") {
+      if (
+        world.revoked ||
+        (input.refreshToken !== "fake-refresh-token" &&
+          input.refreshToken !== "fake-refresh-token-datamanager")
+      ) {
         const error = new Error("invalid_grant");
         error.name = "GoogleAdsAuthError";
         throw error;
       }
-      return { accessToken: "fake-access-token", expiresIn: 3600 };
+      return {
+        accessToken:
+          input.refreshToken === "fake-refresh-token-datamanager"
+            ? "fake-access-token-datamanager"
+            : "fake-access-token",
+        expiresIn: 3600,
+      };
     },
     async revokeToken() {
       world.revoked = true;

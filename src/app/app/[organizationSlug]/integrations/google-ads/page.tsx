@@ -9,6 +9,7 @@ import { hasOrganizationPermission } from "@/server/authorization/permissions";
 import { loadOrganizationAccess } from "@/server/authorization/organization";
 import { requireUser } from "@/server/authorization/session";
 import { getGoogleAdsOverview } from "@/server/google-ads/service";
+import { getConversionFeedbackOverview } from "@/server/google-ads/conversion-config";
 import { deriveMonitorHealth } from "@/server/incidents/health";
 import { googleAdsStatusLabel } from "@/server/google-ads/active";
 
@@ -35,6 +36,10 @@ export default async function GoogleAdsIntegrationsPage({
     "integrations:manage",
   );
   const overview = await getGoogleAdsOverview(user.id, organizationSlug);
+  const feedback = await getConversionFeedbackOverview(
+    user.id,
+    organizationSlug,
+  );
   const connection = overview.connection;
   const selected = overview.customers.filter((item) => item.selected);
   const needsApproval = overview.destinations.filter(
@@ -60,7 +65,8 @@ export default async function GoogleAdsIntegrationsPage({
       <h1 className="mt-2 text-3xl font-bold tracking-tight">Google Ads</h1>
       <p className="mt-2 max-w-2xl text-[var(--muted)]">
         LeadGuard reads Final URLs from your Google Ads accounts and watches
-        those landing pages. It never pauses or changes ads.
+        those landing pages. Conversion feedback is a separate, explicit write
+        to Google Data Manager. Destination monitoring stays read-only.
       </p>
 
       <section className="mt-8 max-w-3xl rounded-2xl border border-[var(--border)] bg-white p-6">
@@ -96,6 +102,88 @@ export default async function GoogleAdsIntegrationsPage({
           </div>
         ) : null}
       </section>
+
+      {connection && connection.status !== "DISCONNECTED" ? (
+        <section className="mt-8 max-w-3xl rounded-2xl border border-[var(--border)] bg-white p-6">
+          <h2 className="text-lg font-bold">Conversion feedback</h2>
+          <p
+            className="mt-2 text-sm text-[var(--muted)]"
+            data-testid="data-manager-status"
+          >
+            Data Manager{" "}
+            {feedback.capabilities.dataManagerStatus === "READY"
+              ? "Connected"
+              : feedback.capabilities.dataManagerStatus === "REAUTH_REQUIRED"
+                ? "Additional Google permission required"
+                : "Not configured"}
+          </p>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-[var(--muted)]">Successful</dt>
+              <dd className="font-semibold">{feedback.counts.succeeded}</dd>
+            </div>
+            <div>
+              <dt className="text-[var(--muted)]">Processing</dt>
+              <dd className="font-semibold">{feedback.counts.processing}</dd>
+            </div>
+            <div>
+              <dt className="text-[var(--muted)]">Needs attention</dt>
+              <dd className="font-semibold">
+                {feedback.counts.needsAttention}
+              </dd>
+            </div>
+          </dl>
+          {feedback.capabilities.dataManagerStatus !== "READY" && canManage ? (
+            <div className="mt-4">
+              <GoogleAdsConnectButton
+                organizationSlug={organizationSlug}
+                intent="data_manager"
+                label="Enable conversion feedback"
+              />
+            </div>
+          ) : null}
+          <p className="mt-4 text-sm">
+            <Link
+              className="font-semibold text-[#19d0a2] hover:underline"
+              href={`/app/${organizationSlug}/integrations/google-ads/conversion-feedback`}
+            >
+              Conversion feedback setup
+            </Link>
+            {" · "}
+            <Link
+              className="font-semibold text-[#19d0a2] hover:underline"
+              href={`/app/${organizationSlug}/integrations/google-ads/conversion-feedback/exports`}
+            >
+              Exports
+            </Link>
+          </p>
+        </section>
+      ) : null}
+
+      {connection && connection.status !== "DISCONNECTED" ? (
+        <section className="mt-8 max-w-3xl rounded-2xl border border-[var(--border)] bg-white p-6">
+          <h2 className="text-lg font-bold">Revenue analytics</h2>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Read-only Google Ads spend plus LeadGuard realized revenue. This
+            does not require Data Manager write access.
+          </p>
+          <p className="mt-4 text-sm">
+            <Link
+              className="font-semibold text-[#19d0a2] hover:underline"
+              href={`/app/${organizationSlug}/integrations/google-ads/analytics`}
+            >
+              Analytics mapping
+            </Link>
+            {" · "}
+            <Link
+              className="font-semibold text-[#19d0a2] hover:underline"
+              href={`/app/${organizationSlug}/analytics/revenue`}
+            >
+              Revenue dashboard
+            </Link>
+          </p>
+        </section>
+      ) : null}
 
       {connection && connection.status !== "DISCONNECTED" ? (
         <section className="mt-8 max-w-3xl rounded-2xl border border-[var(--border)] bg-white p-6">

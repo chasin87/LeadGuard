@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { OrganizationRole } from "@/generated/prisma/enums";
 import { Logo } from "@/components/logo";
 import { OrganizationSwitcher } from "@/components/organization-switcher";
-import { logoutAction } from "@/server/auth/actions";
+import { LogoutButton } from "@/components/logout-button";
 
 export function AppShell({
   organization,
@@ -60,25 +60,44 @@ export function AppShell({
           </Link>
           <Link
             className="block rounded-lg px-3 py-2 text-sm font-semibold hover:bg-slate-50"
-            href={`${base}/integrations/google-ads`}
+            href={`${base}/attribution`}
+          >
+            Attribution
+          </Link>
+          <Link
+            className="block rounded-lg px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+            data-testid="nav-analytics"
+            href={`${base}/analytics/revenue`}
+          >
+            Analytics
+          </Link>
+          <Link
+            className="block rounded-lg px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+            data-testid="nav-integrations"
+            href={`${base}/integrations`}
           >
             Integrations
           </Link>
           <Link
             className="block rounded-lg px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+            data-testid="nav-settings"
             href={`${base}/settings`}
           >
             Settings
           </Link>
-        </nav>
-        <form action={logoutAction} className="px-4 pb-6">
-          <button
-            className="text-sm font-semibold text-[var(--muted)] hover:text-slate-950"
-            type="submit"
+          <Link
+            className="block rounded-lg px-3 py-2 text-sm font-semibold hover:bg-slate-50"
+            data-testid="nav-billing"
+            href={`${base}/settings/billing`}
           >
+            Billing
+          </Link>
+        </nav>
+        <div className="px-4 pb-6">
+          <LogoutButton className="text-sm font-semibold text-[var(--muted)] hover:text-slate-950">
             Uitloggen
-          </button>
-        </form>
+          </LogoutButton>
+        </div>
       </aside>
       <div>{children}</div>
     </div>

@@ -26,6 +26,7 @@ export type OrganizationSummary = {
   id: string;
   name: string;
   slug: string;
+  defaultRevenueCurrencyCode: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -54,10 +55,54 @@ const publicUserSelect = {
 export async function getPublicUserById(
   userId: string,
 ): Promise<PublicUser | null> {
-  return database.user.findUnique({
+  const user = await database.user.findUnique({
     where: { id: userId },
-    select: publicUserSelect,
+    select: {
+      ...publicUserSelect,
+      status: true,
+    },
   });
+  if (!user || user.status !== "ACTIVE") return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    emailVerified: user.emailVerified,
+    lastUsedOrganizationId: user.lastUsedOrganizationId,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+export async function getActiveSessionUser(
+  userId: string,
+): Promise<PublicUser | null> {
+  const user = await database.user.findUnique({
+    where: { id: userId },
+    select: {
+      ...publicUserSelect,
+      status: true,
+      sessionInvalidatedAt: true,
+      lastLoginAt: true,
+    },
+  });
+  if (!user || user.status !== "ACTIVE") return null;
+  if (
+    user.sessionInvalidatedAt &&
+    (!user.lastLoginAt ||
+      user.lastLoginAt.getTime() <= user.sessionInvalidatedAt.getTime())
+  ) {
+    return null;
+  }
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    emailVerified: user.emailVerified,
+    lastUsedOrganizationId: user.lastUsedOrganizationId,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
 }
 
 export type OrganizationAccess =
@@ -98,6 +143,7 @@ export async function requireOrganizationMembership(
       id: true,
       name: true,
       slug: true,
+      defaultRevenueCurrencyCode: true,
       createdAt: true,
       updatedAt: true,
     },

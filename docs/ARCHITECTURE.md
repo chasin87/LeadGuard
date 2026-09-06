@@ -1,5 +1,57 @@
 # Architectuur
 
+## Fase 18.1
+
+LeadGuard-platformbeheer staat op `/platform-admin` met een aparte `PlatformAccess`-laag (`SUPER_ADMIN` / `SUPPORT`). `OrganizationMember.role = ADMIN` blijft tenant-admin en geeft geen platformtoegang. Geen impersonation, geen publieke admin API. Zie [Platform admin](PLATFORM_ADMIN.md) en [Operations console](OPERATIONS_CONSOLE.md).
+
+## Fase 18
+
+Billing hoort bij Organization. Stripe Checkout en Customer Portal zijn hosted. Verified webhooks vullen `BillingCustomer` / `BillingSubscription`. Entitlements komen uit de plan catalog + lokale projection, niet uit live Stripe op iedere pageview. Nieuwe orgs krijgen een lokale Growth-trial zonder card. Bestaande orgs worden gemigreerd als `LEGACY`. Zie [Billing](BILLING.md), [Plans](PLANS_AND_ENTITLEMENTS.md), [Onboarding](ONBOARDING.md) en [Production launch](PRODUCTION_LAUNCH.md).
+
+## Fase 17
+
+Google Ads reported spend wordt periodiek gesynchroniseerd. LeadGuard realized revenue blijft `LeadOutcome`. Real ROAS is een acquisition-cohort ratio met expliciete completeness/coverage, zonder revenue over campaigns te verdelen. Zie [Revenue analytics](REVENUE_ANALYTICS.md) en [Click attribution](GOOGLE_ADS_CLICK_ATTRIBUTION.md).
+
+## Fase 16
+
+Google Ads-geattribueerde WON-leads gaan via Data Manager `events.ingest` terug naar een door OWNER/ADMIN gekozen Conversion Action. Ads destination monitoring blijft read-only. Zie [Google Ads conversion feedback](GOOGLE_ADS_CONVERSION_FEEDBACK.md).
+
+## Fase 15
+
+Externe systemen (CRM, backend, CSV/XLSX) sturen normalized outcome-events. Er blijft één waarheid: `LeadOutcome`.
+
+```text
+External systems
+      ↓
+API / Webhook / File
+      ↓
+ExternalOutcomeIntegration
+      ↓
+ExternalOutcomeEvent
+      ↓
+Exact Lead Matcher
+      ↓
+ExternalLeadLink
+      ↓
+Freshness / conflict evaluation
+      ↓
+applyLeadOutcomeMutation
+      ↓
+LeadOutcome
+      ↓
+LeadOutcomeEvent
+```
+
+Dedicated `lgoi_` credentials, HMAC replay-window, geen fuzzy PII-matching, geen auto-create Lead, geen native HubSpot/Pipedrive. Normalized WON outcomes kunnen daarna dezelfde Google conversion-exportplanner gebruiken als handmatige WON. Zie [Outcome ingestion API](OUTCOME_INGESTION_API.md), [Outcome imports](OUTCOME_IMPORTS.md) en [CRM bridge](CRM_BRIDGE.md).
+
+## Fase 14
+
+Iedere echte `Lead` heeft een `LeadOutcome` (NEW / QUALIFIED / WON / LOST) en een immutable `LeadOutcomeEvent`-trail. Realized revenue bestaat alleen bij WON, in minor units + ISO-currency. Manual UI loopt via dezelfde domainservice die later CRM/CSV/API moeten gebruiken. Geen ROAS, geen Google conversion writes. Zie [Lead & revenue data layer](LEAD_REVENUE_DATA_LAYER.md).
+
+## Fase 13
+
+Een Website kan tracking expliciet aanzetten. De publieke SDK (`/tracker/v1.js`) vangt na consent GCLID/GBRAID/WBRAID, anonieme visitor/session en een opaque attribution token. Expliciete `trackLead` of de server lead-API maakt een `Lead` + `LeadAttribution` (last eligible paid touch + first touch). Geen omzet, CRM of Google conversion writes. Zie [Revenue attribution](REVENUE_ATTRIBUTION_FOUNDATION.md) en [Tracking SDK](TRACKING_SDK.md).
+
 ## Fase 12
 
 Een `AD_DESTINATION`-incident krijgt een `GoogleAdsIncidentImpact`-record. De Google Ads-worker haalt read-only clicks/`cost_micros` op, rekent een incidentvenster in de customer-timezone, en toont estimated vs reported spend zonder revenue-claims. Zie [Google Ads incident impact](GOOGLE_ADS_INCIDENT_IMPACT.md).
@@ -32,7 +84,7 @@ De build gebruikt `output: standalone`, zodat deployment op een gewone Linux-ser
 
 ## Authenticatie
 
-Auth.js gebruikt JWT-sessies (geschikt voor de Credentials-provider) met HttpOnly cookies. Registratie en login leven in server actions; wachtwoorden worden met Argon2id gehasht in `src/server/auth`. OAuth (Google/Microsoft) en magic links zijn nog niet ingeschakeld, maar `Account` en `VerificationToken` staan klaar in het schema.
+Auth.js gebruikt JWT-sessies (geschikt voor de Credentials-provider) met HttpOnly cookies. Registratie, login en password reset leven in server actions; wachtwoorden worden met Argon2id gehasht in `src/server/auth`. Reset tokens staan hashed in `VerificationToken`. OAuth (Google/Microsoft) en verplichte e-mailverificatie zijn nog niet ingeschakeld.
 
 `src/proxy.ts` doet alleen een optimistische sessiecheck (ingelogd of niet) voor `/app` en `/onboarding`. Dat is geen autorisatie. Elke pagina, server action en service controleert de echte sessie dicht bij de data.
 
@@ -62,6 +114,13 @@ User
                     GoogleAdsDestinationTarget
                     FormTestProfile
                     InboundEmailMessage
+                    WebsiteTrackingConfig
+                    AttributionVisitor / Session / Touch / Token
+                    Lead
+                    LeadAttribution
+                    LeadOutcome / LeadOutcomeEvent
+                    BillingCustomer
+                    BillingSubscription
                               NotificationChannel
                               NotificationOutboxEvent
                               NotificationDelivery
@@ -84,12 +143,15 @@ Actieve organisatie komt uit de route:
 /app/[organizationSlug]/incidents/[incidentId]
 /app/[organizationSlug]/checks/[checkId]/screenshot
 /app/[organizationSlug]/settings
+/app/[organizationSlug]/settings/billing
 /app/[organizationSlug]/settings/members
 /app/[organizationSlug]/settings/notifications
 /app/[organizationSlug]/settings/notifications/new
 /app/[organizationSlug]/settings/notifications/[channelId]
 /app/[organizationSlug]/integrations/google-ads
 /app/[organizationSlug]/integrations/google-ads/destinations/[targetId]
+/app/[organizationSlug]/attribution
+/app/[organizationSlug]/attribution/[leadId]
 ```
 
 De slug in de URL is nooit voldoende autorisatie. De centrale laag in `src/server/authorization` eist:
@@ -179,7 +241,7 @@ De beoogde runtime bestaat uit vier afzonderlijk te starten rollen:
 3. **Scheduler** — plant verschuldigde checks in de PostgreSQL-backed queue.
 4. **Notification worker** — verwerkt meldingen onafhankelijk en idempotent.
 
-De directories `src/workers` en `src/jobs` bevatten de scheduler, pg-boss queue en monitoring worker. De worker roept `assertPublicHttpTarget()` vóór iedere outbound request aan, en opnieuw voor iedere redirect.
+De directories `src/workers` en `src/jobs` bevatten de scheduler, pg-boss queue en monitoring worker. De worker roept `assertPublicHttpTarget()` vóór iedere outbound request aan, en opnieuw voor iedere redirect. Tracking-ingestion schrijft direct naar PostgreSQL (geen zware queue); retention/reconcile draait in de scheduler.
 
 ## Modulair ontwerp
 
@@ -196,8 +258,11 @@ Auth-, tenant- en websitelogica:
 - `src/server/incidents`
 - `src/server/notifications`
 - `src/server/receipts`
+- `src/server/tracking`
+- `src/tracking/sdk`
 - `src/server/monitoring/soft404`
-- `src/jobs`
+- `src/server/google-ads`
+- `src/server/revenue-analytics`
 - `src/workers`
 - `src/server/security`
 - `src/lib/urls`

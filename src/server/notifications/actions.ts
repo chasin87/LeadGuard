@@ -10,7 +10,10 @@ import {
 } from "@/lib/validation/notification";
 import { AuthorizationError, DomainError } from "@/server/authorization/errors";
 import { requireUser } from "@/server/authorization/session";
-import { consumeRateLimit } from "@/server/auth/rate-limit";
+import {
+  clientRateLimitIdentity,
+  consumeRateLimit,
+} from "@/server/auth/rate-limit";
 import {
   IncidentNotFoundError,
   NotificationChannelNotFoundError,
@@ -42,13 +45,8 @@ function checkbox(formData: FormData, name: string): boolean {
 }
 
 async function rateLimitKey(kind: string, userId: string): Promise<string> {
-  const headerList = await headers();
-  const forwarded = headerList.get("x-forwarded-for");
-  const ip =
-    forwarded?.split(",")[0]?.trim() ||
-    headerList.get("x-real-ip") ||
-    "unknown";
-  return `${kind}:${userId}:${ip}`;
+  const identity = clientRateLimitIdentity(await headers());
+  return `${kind}:${userId}:${identity}`;
 }
 
 function revalidateNotificationPaths(

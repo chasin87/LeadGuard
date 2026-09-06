@@ -15,6 +15,7 @@ import { closeSharedBrowser } from "@/server/monitoring/browser/session";
 import { database } from "@/server/database";
 import { createLogger } from "@/server/logger";
 import type { FormCheckJobData, MonitorCheckJobData } from "@/jobs/queue";
+import { recordWorkerHeartbeat } from "@/server/ops/heartbeat";
 
 const logger = createLogger("browser-worker");
 
@@ -58,6 +59,7 @@ export async function startBrowserWorker(): Promise<void> {
     concurrency: config.workerConcurrency,
     formConcurrency: formConfig.workerConcurrency,
   });
+  await recordWorkerHeartbeat("BROWSER");
 }
 
 export async function stopBrowserWorker(): Promise<void> {

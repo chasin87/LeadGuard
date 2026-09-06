@@ -22,7 +22,7 @@ export async function getEmailProvider(): Promise<EmailProvider> {
 }
 
 async function createEmailProvider(): Promise<EmailProvider> {
-  if (process.env.NODE_ENV === "test") {
+  if (process.env.NODE_ENV === "test" || process.env.E2E_RUNTIME === "true") {
     return createMemoryEmailProvider();
   }
   const env = getServerEnvironment();

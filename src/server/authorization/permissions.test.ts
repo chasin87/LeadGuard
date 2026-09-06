@@ -58,5 +58,14 @@ describe("organization permissions", () => {
     expect(hasOrganizationPermission("OWNER", "integrations:manage")).toBe(
       true,
     );
+    expect(hasOrganizationPermission("MEMBER", "leads:read")).toBe(true);
+    expect(hasOrganizationPermission("MEMBER", "leads:manage")).toBe(false);
+    expect(hasOrganizationPermission("ADMIN", "leads:manage")).toBe(true);
+    expect(hasOrganizationPermission("OWNER", "leads:manage")).toBe(true);
+    expect(hasOrganizationPermission("OWNER", "billing:manage")).toBe(true);
+    expect(hasOrganizationPermission("ADMIN", "billing:manage")).toBe(false);
+    expect(hasOrganizationPermission("ADMIN", "billing:read")).toBe(true);
+    expect(hasOrganizationPermission("MEMBER", "billing:read")).toBe(true);
+    expect(hasOrganizationPermission("MEMBER", "billing:manage")).toBe(false);
   });
 });

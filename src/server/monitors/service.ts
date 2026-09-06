@@ -24,6 +24,7 @@ import {
   resolveSafeOutboundTarget,
   type DnsResolver,
 } from "@/server/security/ssrf";
+import { requireCapacity, requireFeature } from "@/server/billing/limits";
 import {
   formConsentVersion,
   getFormMonitoringConfig,
@@ -502,7 +503,11 @@ export async function createMonitor(
   const requiredSelector = input.requiredSelector?.trim() || null;
   const requiredElementName = input.requiredElementName?.trim() || null;
 
+  if (type === "BROWSER") {
+    await requireFeature(website.organizationId, "browserMonitoring");
+  }
   if (type === "FORM") {
+    await requireFeature(website.organizationId, "formMonitoring");
     const formLimits = getFormMonitoringConfig();
     const existing = await database.monitor.count({
       where: {
@@ -541,57 +546,63 @@ export async function createMonitor(
           })
         : null;
 
-    const monitor = await database.monitor.create({
-      data: {
-        websiteId: website.id,
-        name: input.name.trim(),
-        type,
-        url: parsed.normalizedUrl,
-        normalizedUrl: parsed.normalizedUrl,
-        intervalSeconds: input.intervalSeconds,
-        timeoutMs: input.timeoutMs,
-        consecutiveFailuresBeforeIncident:
-          input.consecutiveFailuresBeforeIncident ?? 2,
-        status: type === "FORM" ? "PAUSED" : "ACTIVE",
-        nextCheckAt:
-          type === "FORM"
-            ? new Date(Date.now() + input.intervalSeconds * 1000)
-            : new Date(),
-        browserConfig:
-          type === "BROWSER"
-            ? {
-                create: {
-                  viewport: input.viewport ?? "DESKTOP",
-                  requiredSelector,
-                  requiredElementName,
-                },
-              }
-            : undefined,
-        formConfig:
-          type === "FORM"
-            ? {
-                create: {
-                  viewport: input.viewport ?? "DESKTOP",
-                  formSelector: input.formSelector ?? "",
-                  submitSelector: input.submitSelector ?? "",
-                  cookieAcceptSelector: input.cookieAcceptSelector || null,
-                  fieldMappings: (input.fieldMappings ??
-                    []) as Prisma.InputJsonValue,
-                  successMode: input.successMode ?? "ANY",
-                  successSelector: input.successSelector || null,
-                  successUrlPattern: input.successUrlPattern || null,
-                  successText: input.successText || null,
-                  submissionTimeoutMs: input.submissionTimeoutMs ?? 20_000,
-                  testProfileId,
-                  configurationStatus: "UNVERIFIED",
-                  consentedAt: new Date(),
-                  consentedByUserId: input.userId,
-                  consentVersion: formConsentVersion,
-                },
-              }
-            : undefined,
-      },
-      select: monitorSelect,
+    const monitor = await database.$transaction(async (tx) => {
+      if (type === "FORM") {
+        await requireCapacity(website.organizationId, "formMonitors", 1, tx);
+      }
+      await requireCapacity(website.organizationId, "monitors", 1, tx);
+      return tx.monitor.create({
+        data: {
+          websiteId: website.id,
+          name: input.name.trim(),
+          type,
+          url: parsed.normalizedUrl,
+          normalizedUrl: parsed.normalizedUrl,
+          intervalSeconds: input.intervalSeconds,
+          timeoutMs: input.timeoutMs,
+          consecutiveFailuresBeforeIncident:
+            input.consecutiveFailuresBeforeIncident ?? 2,
+          status: type === "FORM" ? "PAUSED" : "ACTIVE",
+          nextCheckAt:
+            type === "FORM"
+              ? new Date(Date.now() + input.intervalSeconds * 1000)
+              : new Date(),
+          browserConfig:
+            type === "BROWSER"
+              ? {
+                  create: {
+                    viewport: input.viewport ?? "DESKTOP",
+                    requiredSelector,
+                    requiredElementName,
+                  },
+                }
+              : undefined,
+          formConfig:
+            type === "FORM"
+              ? {
+                  create: {
+                    viewport: input.viewport ?? "DESKTOP",
+                    formSelector: input.formSelector ?? "",
+                    submitSelector: input.submitSelector ?? "",
+                    cookieAcceptSelector: input.cookieAcceptSelector || null,
+                    fieldMappings: (input.fieldMappings ??
+                      []) as Prisma.InputJsonValue,
+                    successMode: input.successMode ?? "ANY",
+                    successSelector: input.successSelector || null,
+                    successUrlPattern: input.successUrlPattern || null,
+                    successText: input.successText || null,
+                    submissionTimeoutMs: input.submissionTimeoutMs ?? 20_000,
+                    testProfileId,
+                    configurationStatus: "UNVERIFIED",
+                    consentedAt: new Date(),
+                    consentedByUserId: input.userId,
+                    consentVersion: formConsentVersion,
+                  },
+                }
+              : undefined,
+        },
+        select: monitorSelect,
+      });
     });
     logger.info("monitor.created", {
       organizationId: website.organizationId,

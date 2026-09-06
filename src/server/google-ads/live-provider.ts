@@ -1,7 +1,6 @@
 import {
   googleAdsApiBaseUrl,
   googleAdsAuthUrl,
-  googleAdsOAuthScope,
   googleAdsRevokeUrl,
   googleAdsTokenUrl,
   getGoogleAdsConfig,
@@ -15,6 +14,10 @@ import {
 import type {
   GoogleAdsAccount,
   GoogleAdsAuthClient,
+  GoogleAdsCampaignDailyPerformanceRow,
+  GoogleAdsClickViewRow,
+  GoogleAdsConversionActionRow,
+  GoogleAdsCustomerDailyPerformanceRow,
   GoogleAdsDailyLandingPageMetric,
   GoogleAdsHourlySourceMetric,
   GoogleAdsObservedLandingPage,
@@ -508,7 +511,132 @@ export function createLiveGoogleAdsReadProvider(): GoogleAdsReadProvider {
       }
       return rows;
     },
+    async listConversionActions(session, googleCustomerId) {
+      const rows: GoogleAdsConversionActionRow[] = [];
+      for await (const row of searchPages(
+        session,
+        googleCustomerId,
+        googleAdsQueries.conversionActions,
+      )) {
+        const action = asObject(row.conversionAction);
+        const id = asGoogleIdString(action.id);
+        if (!id) continue;
+        rows.push({
+          conversionActionId: id,
+          name: typeof action.name === "string" ? action.name : id,
+          status: typeof action.status === "string" ? action.status : "UNKNOWN",
+          type: typeof action.type === "string" ? action.type : "UNKNOWN",
+          category:
+            typeof action.category === "string" ? action.category : null,
+          countingType:
+            typeof action.countingType === "string"
+              ? action.countingType
+              : null,
+          clickThroughLookbackWindowDays:
+            typeof action.clickThroughLookbackWindowDays === "number"
+              ? action.clickThroughLookbackWindowDays
+              : typeof action.clickThroughLookbackWindowDays === "string" &&
+                  /^-?\d+$/.test(action.clickThroughLookbackWindowDays)
+                ? Number(action.clickThroughLookbackWindowDays)
+                : null,
+        });
+      }
+      return rows;
+    },
+    async getCustomerDailyPerformance(session, googleCustomerId, range) {
+      const rows: GoogleAdsCustomerDailyPerformanceRow[] = [];
+      for await (const row of searchPages(
+        session,
+        googleCustomerId,
+        googleAdsQueries.customerDailyPerformance(range.fromDate, range.toDate),
+      )) {
+        const segments = asObject(row.segments);
+        const date = asDate(segments.date);
+        if (!date) continue;
+        rows.push({ date, ...metricTriple(row) });
+      }
+      return rows;
+    },
+    async getCampaignDailyPerformance(session, googleCustomerId, range) {
+      const rows: GoogleAdsCampaignDailyPerformanceRow[] = [];
+      for await (const row of searchPages(
+        session,
+        googleCustomerId,
+        googleAdsQueries.campaignDailyPerformance(range.fromDate, range.toDate),
+      )) {
+        const campaign = asObject(row.campaign);
+        const segments = asObject(row.segments);
+        const campaignId = asGoogleIdString(campaign.id);
+        const date = asDate(segments.date);
+        if (!campaignId || !date) continue;
+        rows.push({
+          date,
+          campaignId,
+          campaignName:
+            typeof campaign.name === "string" ? campaign.name : campaignId,
+          campaignStatus:
+            typeof campaign.status === "string" ? campaign.status : "UNKNOWN",
+          advertisingChannelType:
+            typeof campaign.advertisingChannelType === "string"
+              ? campaign.advertisingChannelType
+              : null,
+          ...metricTriple(row),
+        });
+      }
+      return rows;
+    },
+    async getClickViews(session, googleCustomerId, input) {
+      const rows: GoogleAdsClickViewRow[] = [];
+      if (input.gclids.length === 0) return rows;
+      for await (const row of searchPages(
+        session,
+        googleCustomerId,
+        googleAdsQueries.clickViews(input.date, input.gclids),
+      )) {
+        const clickView = asObject(row.clickView);
+        const campaign = asObject(row.campaign);
+        const adGroup = asObject(row.adGroup);
+        const keywordInfo = asObject(clickView.keywordInfo);
+        const segments = asObject(row.segments);
+        const gclid =
+          typeof clickView.gclid === "string" ? clickView.gclid : "";
+        const date = asDate(segments.date) || input.date;
+        if (!gclid) continue;
+        const campaignId = asGoogleIdString(campaign.id) || null;
+        rows.push({
+          date,
+          gclid,
+          campaignId,
+          campaignName:
+            typeof campaign.name === "string" ? campaign.name : null,
+          campaignStatus:
+            typeof campaign.status === "string" ? campaign.status : null,
+          advertisingChannelType:
+            typeof campaign.advertisingChannelType === "string"
+              ? campaign.advertisingChannelType
+              : null,
+          adGroupId: asGoogleIdString(adGroup.id) || null,
+          adGroupName: typeof adGroup.name === "string" ? adGroup.name : null,
+          adId: lastResourceId(clickView.adGroupAd),
+          keywordCriterionId: lastResourceId(clickView.keyword),
+          keywordText:
+            typeof keywordInfo.text === "string" ? keywordInfo.text : null,
+          keywordMatchType:
+            typeof keywordInfo.matchType === "string"
+              ? keywordInfo.matchType
+              : null,
+        });
+      }
+      return rows;
+    },
   };
+}
+
+function lastResourceId(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  const tail = value.split("/").pop() ?? "";
+  const id = tail.includes("~") ? tail.split("~").pop() : tail;
+  return id && /^\d+$/.test(id) ? id : null;
 }
 
 function tokenSetFromJson(json: JsonObject): GoogleAdsOAuthTokenSet {
@@ -518,6 +646,7 @@ function tokenSetFromJson(json: JsonObject): GoogleAdsOAuthTokenSet {
       typeof json.refresh_token === "string" ? json.refresh_token : null,
     expiresIn: typeof json.expires_in === "number" ? json.expires_in : null,
     email: null,
+    scope: typeof json.scope === "string" ? json.scope : null,
   };
 }
 
@@ -528,10 +657,13 @@ export function createLiveGoogleAdsAuthClient(): GoogleAdsAuthClient {
       url.searchParams.set("client_id", input.clientId);
       url.searchParams.set("redirect_uri", input.redirectUri);
       url.searchParams.set("response_type", "code");
-      url.searchParams.set("scope", googleAdsOAuthScope);
+      url.searchParams.set("scope", input.scopes.join(" "));
       url.searchParams.set("access_type", "offline");
       url.searchParams.set("prompt", "consent");
-      url.searchParams.set("include_granted_scopes", "false");
+      url.searchParams.set(
+        "include_granted_scopes",
+        input.includeGrantedScopes ? "true" : "false",
+      );
       url.searchParams.set("state", input.state);
       return url.toString();
     },

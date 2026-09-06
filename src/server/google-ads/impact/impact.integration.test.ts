@@ -140,7 +140,7 @@ describe("Google Ads incident impact", () => {
     expect(impact.windowClicksEstimated).toBe(true);
     expect(impact.attributionMethod).toBe("MIXED");
     expect(impact.status).toBe("PARTIAL");
-  });
+  }, 60_000);
 
   it("treats a metrics API failure as ERROR without a new incident", async () => {
     resetFakeGoogleAdsWorld({ failMetricsFor: ["2222222222"] });

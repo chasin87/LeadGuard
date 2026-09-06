@@ -904,6 +904,11 @@ export async function claimDueGoogleAdsCustomers(now = new Date()): Promise<
         status: "CONNECTED",
         encryptedRefreshToken: { not: null },
       },
+      organization: {
+        billingSubscription: {
+          status: { in: ["TRIALING", "ACTIVE", "PAST_DUE", "GRACE_PERIOD"] },
+        },
+      },
       OR: [{ lastSyncedAt: null }, { lastSyncedAt: { lte: dueBefore } }],
     },
     take: getGoogleAdsConfig().schedulerBatchSize,

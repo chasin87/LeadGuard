@@ -7,6 +7,10 @@ export const googleAdsApiBaseUrl = `https://googleads.googleapis.com/${googleAds
 
 export const googleAdsSyncQueue = "integration.google_ads.sync";
 export const googleAdsImpactQueue = "integration.google_ads.incident_impact";
+export const googleAdsAnalyticsSyncQueue = "google_ads.analytics.sync";
+export const googleAdsAnalyticsBackfillQueue = "google_ads.analytics.backfill";
+export const googleAdsClickAttributionQueue =
+  "google_ads.click_attribution.resolve";
 
 export type GoogleAdsProviderKind = "fake" | "google";
 
@@ -23,8 +27,15 @@ function intEnv(
   return value;
 }
 
-export function isProductionRuntime(): boolean {
-  return process.env.NODE_ENV === "production";
+export function isE2eRuntime(env: NodeJS.Dict<string> = process.env): boolean {
+  return env.E2E_RUNTIME === "true";
+}
+
+export function isProductionRuntime(
+  env: NodeJS.Dict<string> = process.env,
+): boolean {
+  if (isE2eRuntime(env)) return false;
+  return env.NODE_ENV === "production";
 }
 
 export function getGoogleAdsProviderKind(): GoogleAdsProviderKind {
@@ -107,12 +118,95 @@ export function getGoogleAdsConfig() {
       180,
     ),
     impactIdChunkSize: 80,
+    analyticsSyncIntervalSeconds: intEnv(
+      "GOOGLE_ADS_ANALYTICS_SYNC_INTERVAL_SECONDS",
+      900,
+      300,
+      86_400,
+    ),
+    analyticsRecentRefreshDays: intEnv(
+      "GOOGLE_ADS_ANALYTICS_RECENT_REFRESH_DAYS",
+      7,
+      1,
+      30,
+    ),
+    analyticsPeriodicRefreshDays: intEnv(
+      "GOOGLE_ADS_ANALYTICS_PERIODIC_REFRESH_DAYS",
+      30,
+      7,
+      90,
+    ),
+    analyticsDefaultBackfillDays: intEnv(
+      "GOOGLE_ADS_ANALYTICS_DEFAULT_BACKFILL_DAYS",
+      90,
+      1,
+      365,
+    ),
+    analyticsMaxBackfillDays: intEnv(
+      "GOOGLE_ADS_ANALYTICS_MAX_BACKFILL_DAYS",
+      365,
+      90,
+      1110,
+    ),
+    analyticsDailyLookbackMonths: 37,
+    analyticsManualRefreshCooldownSeconds: intEnv(
+      "GOOGLE_ADS_ANALYTICS_MANUAL_REFRESH_COOLDOWN_SECONDS",
+      60,
+      15,
+      3_600,
+    ),
+    analyticsBackfillCooldownSeconds: intEnv(
+      "GOOGLE_ADS_ANALYTICS_BACKFILL_COOLDOWN_SECONDS",
+      3_600,
+      300,
+      86_400,
+    ),
+    analyticsWorkerConcurrency: intEnv(
+      "GOOGLE_ADS_ANALYTICS_WORKER_CONCURRENCY",
+      1,
+      1,
+      2,
+    ),
+    clickViewLookbackDays: 90,
+    clickViewBatchSize: intEnv("GOOGLE_ADS_CLICK_VIEW_BATCH_SIZE", 50, 1, 200),
+    clickResolveRetryLimit: intEnv(
+      "GOOGLE_ADS_CLICK_RESOLVE_RETRY_LIMIT",
+      4,
+      1,
+      8,
+    ),
+    clickResolveRetryDelaySeconds: intEnv(
+      "GOOGLE_ADS_CLICK_RESOLVE_RETRY_DELAY_SECONDS",
+      900,
+      60,
+      21_600,
+    ),
+    analyticsSpendDelayedAfterHours: intEnv(
+      "GOOGLE_ADS_ANALYTICS_SPEND_DELAYED_AFTER_HOURS",
+      3,
+      1,
+      24,
+    ),
+    analyticsSpendStaleAfterHours: intEnv(
+      "GOOGLE_ADS_ANALYTICS_SPEND_STALE_AFTER_HOURS",
+      24,
+      6,
+      168,
+    ),
+    analyticsCohortMaturityDays: intEnv(
+      "GOOGLE_ADS_ANALYTICS_COHORT_MATURITY_DAYS",
+      14,
+      1,
+      90,
+    ),
   };
 }
 
 export function assertFakeProviderNotUsedInProduction(
   runtime = process.env.NODE_ENV,
+  env: NodeJS.Dict<string> = process.env,
 ): void {
+  if (isE2eRuntime(env)) return;
   if (getGoogleAdsProviderKind() === "fake" && runtime === "production") {
     throw new Error("GOOGLE_ADS_PROVIDER=fake is not allowed in production.");
   }

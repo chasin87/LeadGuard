@@ -129,4 +129,4 @@ Geen “mark as working”-knop. MEMBER is read-only; OWNER/ADMIN wijzigen confi
 | Submit success, receipt RECEIVED | operational                       |
 | Receipt timeout                  | failing, daarna down na threshold |
 
-Zie ook [Incidents](INCIDENTS.md) en [Form monitoring](FORM_MONITORING.md). Google Ads click/cost impact (spend-at-risk) is Fase 12, niet receipt verification.
+Zie ook [Incidents](INCIDENTS.md) en [Form monitoring](FORM_MONITORING.md). Google Ads click/cost impact (spend-at-risk) is Fase 12. Echte visitor-leads en click-ID attribution zijn Fase 13 en staan los van receipt verification.

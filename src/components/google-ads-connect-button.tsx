@@ -1,15 +1,22 @@
 "use client";
 
 import { startGoogleAdsConnectAction } from "@/server/google-ads/actions";
+import type { GoogleOAuthIntent } from "@/server/google-ads/scopes";
 
 export function GoogleAdsConnectButton({
   organizationSlug,
   label,
+  intent = "connect",
 }: {
   organizationSlug: string;
   label: string;
+  intent?: GoogleOAuthIntent;
 }) {
-  const action = startGoogleAdsConnectAction.bind(null, organizationSlug);
+  const action = startGoogleAdsConnectAction.bind(
+    null,
+    organizationSlug,
+    intent,
+  );
   return (
     <form action={action}>
       <button

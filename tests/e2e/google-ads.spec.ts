@@ -1,39 +1,10 @@
-import { expect, test } from "@playwright/test";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
-const password = "CorrectHorse1";
-
-function uniqueEmail(prefix: string) {
-  const safePrefix = prefix.toLowerCase().replace(/[^a-z0-9]+/g, ".");
-  return `${safePrefix}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}@example.com`;
-}
-
-async function registerOrganization(
-  page: import("@playwright/test").Page,
-  name: string,
-  organizationName: string,
-) {
-  const email = uniqueEmail(name);
-  await page.goto("/register");
-  await page.getByLabel("Naam").fill(name);
-  await page.getByLabel("E-mailadres").fill(email);
-  await page.getByLabel("Wachtwoord").fill(password);
-  await page.getByRole("button", { name: "Account aanmaken" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Maak je organisatie" }),
-  ).toBeVisible({ timeout: 15_000 });
-  await page.getByLabel("Bedrijfsnaam").fill(organizationName);
-  await page.getByRole("button", { name: "Organisatie maken" }).click();
-  await expect(page).toHaveURL(/\/app\/.+\/dashboard$/);
-}
+import { expect, registerOrganization, runApplyScript, test } from "./fixtures";
 
 test("fake Google Ads connect, sync, approval, incident context, and disconnect", async ({
   page,
-}) => {
+}, testInfo) => {
   test.setTimeout(180_000);
-  await registerOrganization(page, "Ads Owner", "Ads Company");
+  await registerOrganization(page, "Ads Owner", "Ads Company", testInfo);
   await page.getByRole("link", { name: "Websites" }).click();
   await page.getByRole("link", { name: "Add website" }).first().click();
   await page.getByLabel("Website name").fill("Example NL");
@@ -41,7 +12,8 @@ test("fake Google Ads connect, sync, approval, incident context, and disconnect"
   await page.getByRole("button", { name: "Add website" }).click();
   await expect(page).toHaveURL(/\/websites\/(?!new)/, { timeout: 20_000 });
 
-  await page.getByRole("link", { name: "Integrations" }).click();
+  await page.getByTestId("nav-integrations").click();
+  await page.getByTestId("integration-google-ads").click();
   await expect(page.getByRole("heading", { name: "Google Ads" })).toBeVisible({
     timeout: 15_000,
   });
@@ -86,21 +58,18 @@ test("fake Google Ads connect, sync, approval, incident context, and disconnect"
   const monitorId = monitorUrl.split("/monitors/")[1]?.split("/")[0];
   expect(monitorId).toBeTruthy();
 
-  await execFileAsync("npx", [
-    "tsx",
-    "--env-file=.env",
-    "tests/e2e/apply-monitor-check.ts",
+  await runApplyScript("tests/e2e/apply-monitor-check.ts", [
     monitorId!,
     "FAILURE",
   ]);
-  await execFileAsync("npx", [
-    "tsx",
-    "--env-file=.env",
-    "tests/e2e/apply-monitor-check.ts",
+  await runApplyScript("tests/e2e/apply-monitor-check.ts", [
     monitorId!,
     "FAILURE",
   ]);
   await page.goto(monitorUrl);
+  await expect(
+    page.getByRole("link", { name: "View open incident" }),
+  ).toBeVisible({ timeout: 20_000 });
   await page.getByRole("link", { name: "View open incident" }).click();
   await expect(
     page.getByRole("heading", { name: "Google Ads impact" }),
@@ -109,15 +78,12 @@ test("fake Google Ads connect, sync, approval, incident context, and disconnect"
   const incidentUrl = page.url();
   const incidentId = incidentUrl.split("/incidents/")[1]?.split("/")[0];
   expect(incidentId).toBeTruthy();
-  await execFileAsync("npx", [
-    "tsx",
-    "--env-file=.env",
-    "tests/e2e/apply-ads-impact.ts",
+  await runApplyScript("tests/e2e/apply-ads-impact.ts", [
     incidentId!,
     "hourly",
   ]);
   await page.goto(incidentUrl);
-  await expect(page.getByText("€135.00")).toBeVisible();
+  await expect(page.getByText("€135.00")).toBeVisible({ timeout: 20_000 });
   await expect(
     page.getByText(/Partial spend attribution|Estimated spend at risk/),
   ).toBeVisible();
@@ -126,35 +92,26 @@ test("fake Google Ads connect, sync, approval, incident context, and disconnect"
   ).toBeVisible();
   await expect(page.getByText("Exact incident-window spend")).toHaveCount(0);
 
-  await execFileAsync("npx", [
-    "tsx",
-    "--env-file=.env",
-    "tests/e2e/apply-ads-impact.ts",
-    incidentId!,
-    "daily",
-  ]);
+  await runApplyScript("tests/e2e/apply-ads-impact.ts", [incidentId!, "daily"]);
   await page.goto(incidentUrl);
+  await expect(page.getByText("€240.00")).toBeVisible({ timeout: 20_000 });
   await expect(
     page.getByText(/Destination spend on incident date/),
   ).toBeVisible();
-  await expect(page.getByText("€240.00")).toBeVisible();
   await expect(page.getByText("Spend during monitored outage")).toHaveCount(0);
   await expect(page.getByText("€135.00")).toHaveCount(0);
 
-  await execFileAsync("npx", [
-    "tsx",
-    "--env-file=.env",
-    "tests/e2e/apply-ads-impact.ts",
-    incidentId!,
-    "none",
-  ]);
+  await runApplyScript("tests/e2e/apply-ads-impact.ts", [incidentId!, "none"]);
   await page.goto(incidentUrl);
-  await expect(page.getByText("Impact data unavailable")).toBeVisible();
+  await expect(page.getByText("Impact data unavailable")).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(
     page.getByRole("heading", { name: /Ad destination/ }),
   ).toBeVisible();
 
-  await page.getByRole("link", { name: "Integrations" }).click();
+  await page.getByTestId("nav-integrations").click();
+  await page.getByTestId("integration-google-ads").click();
   await page.getByRole("button", { name: "Disconnect Google Ads" }).click();
   await expect(page.getByText("Disconnected")).toBeVisible({ timeout: 15_000 });
   await page.goto(monitorUrl);

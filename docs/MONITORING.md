@@ -115,6 +115,12 @@ Een opgeslagen URL is nooit trusted. Per hop:
 ## Lokale processen
 
 ```bash
+npm run dev:all
+```
+
+Of apart:
+
+```bash
 npm run dev
 npm run scheduler
 npm run worker
@@ -131,4 +137,4 @@ Soft-404 voegt milliseconden CPU per succesvolle HTML-check toe: bounded parse, 
 
 `MonitorCheck` groeit snel (~288 rijen/dag per monitor bij 5 minuten). Indexes: `(monitorId, createdAt)`, `createdAt`. Een cleanup/retention-job hoort bij een latere operations-fase.
 
-Google Ads destinations gebruiken hetzelfde HTTP-checkpad als `HTTP`-monitors (`AD_DESTINATION` is een producttype). Zie [Google Ads](GOOGLE_ADS.md).
+Google Ads destinations gebruiken hetzelfde HTTP-checkpad als `HTTP`-monitors (`AD_DESTINATION` is een producttype). Zie [Google Ads](GOOGLE_ADS.md). HTTP-checks voeren geen Tracking SDK uit en maken geen attribution. Tracking-retention draait in dezelfde scheduler-tick als screenshot-cleanup. Zie [Revenue attribution](REVENUE_ATTRIBUTION_FOUNDATION.md).

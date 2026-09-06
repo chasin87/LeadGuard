@@ -38,8 +38,24 @@ export class DomainError extends Error {
   }
 }
 
-export function isAuthorizationError(
-  error: unknown,
-): error is AuthorizationError {
-  return error instanceof AuthorizationError;
+export class OutcomeVersionConflictError extends Error {
+  readonly status = 409;
+  readonly code = "OUTCOME_VERSION_CONFLICT";
+
+  constructor(
+    message = "This lead was updated by someone else. Refresh to see the latest status.",
+  ) {
+    super(message);
+    this.name = "OutcomeVersionConflictError";
+  }
+}
+
+export class LeadNotFoundError extends Error {
+  readonly status = 404;
+  readonly code = "LEAD_NOT_FOUND";
+
+  constructor(message = "Lead not found.") {
+    super(message);
+    this.name = "LeadNotFoundError";
+  }
 }

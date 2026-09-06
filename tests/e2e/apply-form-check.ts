@@ -2,7 +2,9 @@ import { config } from "dotenv";
 import { database } from "@/server/database";
 import { persistAndProcessCheck } from "@/server/incidents/engine";
 
-config({ path: ".env" });
+if (!process.env.DATABASE_URL) {
+  config({ path: process.env.E2E_ENV_FILE ?? ".env" });
+}
 
 async function main() {
   const monitorId = process.argv[2];

@@ -10,13 +10,21 @@ const severity: Record<LogLevel, number> = {
   error: 40,
 };
 const secretKey =
-  /authorization|cookie|password|secret|token|database_url|smtp|emailaddress|webhookurl|encrypt|credential|developer/i;
+  /authorization|cookie|password|secret|token|database_url|smtp|emailaddress|webhookurl|encrypt|credential|developer|clickid|sitekey|signature|bearertoken/i;
+const clickIdKey = /^(gclid|gbraid|wbraid)$/i;
+const moneyKey =
+  /^(revenue|amount|amountminor|revenueamountminor|beforerevenueamountminor|afterrevenueamountminor)$/i;
+
+function shouldRedact(key: string): boolean {
+  if (/^has(Gclid|Gbraid|Wbraid|Revenue|Value)$/i.test(key)) return false;
+  return secretKey.test(key) || clickIdKey.test(key) || moneyKey.test(key);
+}
 
 function sanitize(context: LogContext): LogContext {
   return Object.fromEntries(
     Object.entries(context).map(([key, value]) => [
       key,
-      secretKey.test(key) ? "[REDACTED]" : value,
+      shouldRedact(key) ? "[REDACTED]" : value,
     ]),
   );
 }

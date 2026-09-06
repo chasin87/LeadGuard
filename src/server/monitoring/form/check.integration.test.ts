@@ -17,6 +17,8 @@ import { disconnectFormLocks } from "@/server/monitoring/form-runner";
 import { closeSharedBrowser } from "@/server/monitoring/browser/session";
 import { prepareFormSubmissionAttempt } from "@/server/monitoring/form/attempt";
 import { resetArtifactStorageForTests } from "@/server/storage";
+import { enableWebsiteTracking } from "@/server/tracking/service";
+import { trackerV1Source } from "@/tracking/sdk/v1-source";
 import type { DnsResolver } from "@/server/security/ssrf";
 
 const userIds: string[] = [];
@@ -288,6 +290,65 @@ describe("form monitor checks", () => {
     });
     expect(incident).toBeNull();
   });
+
+  it("does not create revenue attribution from a synthetic form visit", async () => {
+    let trackingPosts = 0;
+    const formWithTracker = `<!doctype html><html><body>
+<script>window.__leadguardWouldHaveRun = !window.__LEADGUARD_MONITORING__;</script>
+<script defer src="/tracker/v1.js" data-site-key="lg_site_fixtureaaaaaaaaaaaaaa"></script>
+<form id="quote-form" method="post" action="/thanks">
+  <input name="name" />
+  <input name="email" type="email" />
+  <textarea name="message"></textarea>
+  <button type="submit">Send</button>
+</form>
+</body></html>`;
+    const { server, origin } = await listen((req, res) => {
+      if (req.url === "/tracker/v1.js") {
+        res.writeHead(200, { "content-type": "application/javascript" });
+        res.end(trackerV1Source);
+        return;
+      }
+      if (req.url === "/api/tracking/v1/events") {
+        trackingPosts += 1;
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+      if (req.method === "POST") {
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        res.end(thanksPage);
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(formWithTracker);
+    });
+    const seeded = await seedFormMonitor("Synthetic tracking");
+    await enableWebsiteTracking({
+      organizationId: seeded.website.organizationId,
+      websiteId: seeded.website.id,
+    });
+    await database.monitor.update({
+      where: { id: seeded.monitor.id },
+      data: { normalizedUrl: `${origin}/` },
+    });
+    await executeFormMonitorJob(seeded.monitor.id, {
+      allowPrivateLoopbackForTests: true,
+      source: "manual",
+      mode: "submit",
+      jobId: `test-synth-${seeded.monitor.id}`,
+    });
+    expect(trackingPosts).toBe(0);
+    expect(
+      await database.attributionVisitor.count({
+        where: { websiteId: seeded.website.id },
+      }),
+    ).toBe(0);
+    expect(
+      await database.lead.count({ where: { websiteId: seeded.website.id } }),
+    ).toBe(0);
+    server.close();
+  }, 90_000);
 
   it("hides form config from another organization", async () => {
     const seeded = await seedFormMonitor("Secret form");

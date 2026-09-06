@@ -10,6 +10,7 @@ import {
 import { database } from "@/server/database";
 import { createLogger } from "@/server/logger";
 import type { MonitorCheckJobData } from "@/jobs/queue";
+import { recordWorkerHeartbeat } from "@/server/ops/heartbeat";
 
 const logger = createLogger("monitor-worker");
 
@@ -26,6 +27,7 @@ export async function startMonitorWorker(): Promise<void> {
     async (jobs) => {
       const job = jobs[0];
       if (!job) return;
+      await recordWorkerHeartbeat("HTTP");
       await executeMonitorJob(job.data.monitorId, {
         jobId: job.id,
         signal: job.signal,
@@ -35,6 +37,7 @@ export async function startMonitorWorker(): Promise<void> {
   logger.info("worker.started", {
     concurrency: config.workerConcurrency,
   });
+  await recordWorkerHeartbeat("HTTP");
 }
 
 export async function stopMonitorWorker(): Promise<void> {

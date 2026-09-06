@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
 import { createLogger } from "@/server/logger";
-import { consumeRateLimit } from "@/server/auth/rate-limit";
+import {
+  clientRateLimitIdentity,
+  consumeRateLimit,
+} from "@/server/auth/rate-limit";
 import { database } from "@/server/database";
 import { extractSubmissionId } from "@/server/monitoring/form/submission-id";
 import { getReceiptConfig } from "@/server/receipts/config";
@@ -13,11 +16,7 @@ export const dynamic = "force-dynamic";
 const logger = createLogger("receipt-webhook");
 
 function clientIp(request: NextRequest) {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
+  return clientRateLimitIdentity(request.headers);
 }
 
 function bearerToken(request: NextRequest) {

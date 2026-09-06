@@ -14,6 +14,7 @@ import {
   resolveSafeOutboundTarget,
   type DnsResolver,
 } from "@/server/security/ssrf";
+import { requireCapacity } from "@/server/billing/limits";
 
 const logger = createLogger("websites");
 
@@ -161,19 +162,22 @@ export async function createWebsite(
   const name = input.name.trim() || suggestedWebsiteName(target.hostname);
 
   try {
-    const website = await database.website.create({
-      data: {
-        organizationId: access.organization.id,
-        name,
-        url: target.normalizedUrl,
-        normalizedUrl: target.normalizedUrl,
-        hostname: target.hostname,
-        scheme: target.scheme,
-        port: target.port,
-        dnsStatus: target.dnsStatus,
-        lastValidatedAt: new Date(),
-      },
-      select: websiteSelect,
+    const website = await database.$transaction(async (tx) => {
+      await requireCapacity(access.organization.id, "websites", 1, tx);
+      return tx.website.create({
+        data: {
+          organizationId: access.organization.id,
+          name,
+          url: target.normalizedUrl,
+          normalizedUrl: target.normalizedUrl,
+          hostname: target.hostname,
+          scheme: target.scheme,
+          port: target.port,
+          dnsStatus: target.dnsStatus,
+          lastValidatedAt: new Date(),
+        },
+        select: websiteSelect,
+      });
     });
     logger.info("website.created", {
       organizationId: access.organization.id,

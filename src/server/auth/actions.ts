@@ -2,28 +2,36 @@
 
 import { headers } from "next/headers";
 import { AuthError } from "next-auth";
-import { loginSchema, registerSchema } from "@/lib/validation/auth";
+import {
+  loginSchema,
+  registerSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from "@/lib/validation/auth";
 import { signIn, signOut } from "@/server/auth";
-import { consumeRateLimit } from "@/server/auth/rate-limit";
+import {
+  clientRateLimitIdentity,
+  consumeRateLimit,
+} from "@/server/auth/rate-limit";
 import {
   createUserAccount,
   resolvePostLoginPathByEmail,
 } from "@/server/auth/service";
 import { DomainError } from "@/server/authorization/errors";
+import {
+  completePasswordReset,
+  requestPasswordReset,
+} from "@/server/auth/password-reset";
 
 export type AuthFormState = {
   error?: string;
   fieldErrors?: Record<string, string[]>;
+  success?: boolean;
 };
 
 async function rateLimitKey(kind: string, extra = ""): Promise<string> {
-  const headerList = await headers();
-  const forwarded = headerList.get("x-forwarded-for");
-  const ip =
-    forwarded?.split(",")[0]?.trim() ||
-    headerList.get("x-real-ip") ||
-    "unknown";
-  return extra ? `${kind}:${ip}:${extra}` : `${kind}:${ip}`;
+  const identity = clientRateLimitIdentity(await headers());
+  return extra ? `${kind}:${identity}:${extra}` : `${kind}:${identity}`;
 }
 
 export async function registerAction(
@@ -118,4 +126,57 @@ export async function loginAction(
 
 export async function logoutAction(): Promise<void> {
   await signOut({ redirectTo: "/login" });
+}
+
+export async function forgotPasswordAction(
+  _previous: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const limit = consumeRateLimit(await rateLimitKey("forgot-password"), 10);
+  if (!limit.ok) {
+    return { error: "Te veel pogingen. Wacht even en probeer het opnieuw." };
+  }
+  const parsed = forgotPasswordSchema.safeParse({
+    email: formData.get("email"),
+  });
+  if (!parsed.success) {
+    return { fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+  try {
+    await requestPasswordReset(parsed.data.email);
+  } catch {
+    return {
+      error:
+        "Het herstelverzoek kon niet worden verstuurd. Probeer het later opnieuw.",
+    };
+  }
+  return { success: true };
+}
+
+export async function resetPasswordAction(
+  _previous: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const limit = consumeRateLimit(await rateLimitKey("reset-password"), 10);
+  if (!limit.ok) {
+    return { error: "Te veel pogingen. Wacht even en probeer het opnieuw." };
+  }
+  const parsed = resetPasswordSchema.safeParse({
+    token: formData.get("token"),
+    password: formData.get("password"),
+  });
+  if (!parsed.success) {
+    return { fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+  try {
+    await completePasswordReset(parsed.data);
+  } catch (error) {
+    if (error instanceof DomainError) {
+      return { error: error.message };
+    }
+    return {
+      error: "Wachtwoord resetten is mislukt. Probeer het later opnieuw.",
+    };
+  }
+  return { success: true };
 }

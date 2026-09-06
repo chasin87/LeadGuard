@@ -4,7 +4,9 @@ import { executeGoogleAdsImpactJob } from "@/server/google-ads/impact/refresh";
 import { zonedLocalToUtc } from "@/server/google-ads/impact/timezone";
 import { resetFakeGoogleAdsWorld } from "@/server/google-ads/fake-provider";
 
-config({ path: ".env" });
+if (!process.env.DATABASE_URL) {
+  config({ path: process.env.E2E_ENV_FILE ?? ".env" });
+}
 
 async function main() {
   const incidentId = process.argv[2];

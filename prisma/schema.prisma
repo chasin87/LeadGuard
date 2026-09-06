@@ -13,6 +13,21 @@ enum OrganizationRole {
   MEMBER
 }
 
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum PlatformRole {
+  SUPER_ADMIN
+  SUPPORT
+}
+
+enum PlatformAccessStatus {
+  ACTIVE
+  DISABLED
+}
+
 enum WebsiteStatus {
   ACTIVE
   DISABLED
@@ -150,6 +165,133 @@ enum LeadReceiptMethod {
   WEBHOOK
 }
 
+enum TrackingConfigStatus {
+  DISABLED
+  ENABLED
+}
+
+enum TrackingConsentMode {
+  REQUIRED
+  EXTERNAL
+}
+
+enum AttributionChannel {
+  GOOGLE_ADS
+  OTHER_PAID
+  ORGANIC
+  DIRECT
+  UNKNOWN
+}
+
+enum LeadSource {
+  BROWSER_SDK
+  SERVER_API
+}
+
+enum LeadAttributionModel {
+  LAST_ELIGIBLE_PAID_TOUCH
+}
+
+enum LeadAttributionStatus {
+  PENDING_ATTRIBUTION
+  ATTRIBUTED
+  ORGANIC_OR_DIRECT
+  UNATTRIBUTED
+  EXPIRED
+  DELETED
+}
+
+enum TrackingIngestionType {
+  SESSION_STARTED
+  ATTRIBUTION_CAPTURED
+  LEAD_CREATED
+}
+
+enum TrackingIngestionStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  REJECTED
+}
+
+enum LeadOutcomeStatus {
+  NEW
+  QUALIFIED
+  WON
+  LOST
+}
+
+enum LeadOutcomeChangeType {
+  CREATED
+  STATUS_CHANGED
+  REVENUE_CHANGED
+  STATUS_AND_REVENUE_CHANGED
+}
+
+enum LeadOutcomeSource {
+  MANUAL
+  API
+  CSV_IMPORT
+  CRM_SYNC
+  SYSTEM
+}
+
+enum LeadOutcomeActorType {
+  USER
+  SYSTEM
+  INTEGRATION
+}
+
+enum ExternalOutcomeIntegrationType {
+  API
+  WEBHOOK
+  FILE_IMPORT
+}
+
+enum ExternalOutcomeIntegrationStatus {
+  ENABLED
+  DISABLED
+}
+
+enum ExternalOutcomeAuthMode {
+  BEARER
+  HMAC
+}
+
+enum ExternalOutcomeEventStatus {
+  RECEIVED
+  APPLIED
+  DUPLICATE
+  UNMATCHED
+  AMBIGUOUS
+  STALE
+  CONFLICT
+  REJECTED
+  IGNORED
+}
+
+enum ExternalLeadMatchMethod {
+  EXTERNAL_LEAD_ID
+  PUBLIC_LEAD_ID
+  SOURCE_RECORD_LINK
+  MANUAL
+}
+
+enum OutcomeImportStatus {
+  UPLOADED
+  PREVIEWED
+  QUEUED
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+
+enum OutcomeImportFileType {
+  CSV
+  XLSX
+}
+
 enum FormFieldControl {
   TEXT
   EMAIL
@@ -161,44 +303,88 @@ enum FormFieldControl {
 }
 
 model User {
-  id                     String    @id @default(cuid())
+  id                     String     @id @default(cuid())
   name                   String
-  email                  String    @unique
+  email                  String     @unique
   emailVerified          DateTime?
   passwordHash           String?
+  status                 UserStatus @default(ACTIVE)
+  lastLoginAt            DateTime?
+  sessionInvalidatedAt   DateTime?
   lastUsedOrganizationId String?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  trialConsumedAt        DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
 
   memberships           OrganizationMember[]
   accounts              Account[]
   consentedFormMonitors FormMonitorConfig[]  @relation("FormMonitorConsent")
+  leadOutcomeEvents     LeadOutcomeEvent[]
+  outcomeImports        OutcomeImport[]
+  platformAccess        PlatformAccess?
 
   @@index([lastUsedOrganizationId])
+  @@index([status])
+  @@index([lastLoginAt])
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                         String    @id @default(cuid())
+  name                       String
+  slug                       String    @unique
+  defaultRevenueCurrencyCode String?
+  manualSuspendedAt          DateTime?
+  manualSuspensionReason     String?
+  manualSuspendedByUserId    String?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
-  members                     OrganizationMember[]
-  invites                     OrganizationInvite[]
-  websites                    Website[]
-  notificationChannels        NotificationChannel[]
-  notificationOutboxEvents    NotificationOutboxEvent[]
-  notificationDeliveries      NotificationDelivery[]
-  formTestProfiles            FormTestProfile[]
-  leadReceiptVerifications    LeadReceiptVerification[]
-  inboundEmailMessages        InboundEmailMessage[]
-  googleAdsConnection         GoogleAdsConnection?
-  googleAdsOAuthStates        GoogleAdsOAuthState[]
-  googleAdsCustomers          GoogleAdsCustomer[]
-  googleAdsDestinationTargets GoogleAdsDestinationTarget[]
-  googleAdsSyncRuns           GoogleAdsSyncRun[]
-  googleAdsIncidentImpacts    GoogleAdsIncidentImpact[]
+  members                             OrganizationMember[]
+  invites                             OrganizationInvite[]
+  websites                            Website[]
+  notificationChannels                NotificationChannel[]
+  notificationOutboxEvents            NotificationOutboxEvent[]
+  notificationDeliveries              NotificationDelivery[]
+  formTestProfiles                    FormTestProfile[]
+  leadReceiptVerifications            LeadReceiptVerification[]
+  inboundEmailMessages                InboundEmailMessage[]
+  googleAdsConnection                 GoogleAdsConnection?
+  googleAdsOAuthStates                GoogleAdsOAuthState[]
+  googleAdsCustomers                  GoogleAdsCustomer[]
+  googleAdsDestinationTargets         GoogleAdsDestinationTarget[]
+  googleAdsSyncRuns                   GoogleAdsSyncRun[]
+  googleAdsIncidentImpacts            GoogleAdsIncidentImpact[]
+  googleAdsConversionFeedbackConfigs  GoogleAdsConversionFeedbackConfig[]
+  googleAdsConversionExports          GoogleAdsConversionExport[]
+  googleAdsConversionActionCaches     GoogleAdsConversionActionCache[]
+  googleAdsAnalyticsConfigs           GoogleAdsAnalyticsConfig[]
+  googleAdsPerformanceDaily           GoogleAdsPerformanceDaily[]
+  googleAdsAnalyticsSyncRuns          GoogleAdsAnalyticsSyncRun[]
+  googleAdsLeadAttributionResolutions GoogleAdsLeadAttributionResolution[]
+  websiteTrackingConfigs              WebsiteTrackingConfig[]
+  attributionVisitors                 AttributionVisitor[]
+  attributionSessions                 AttributionSession[]
+  attributionTouches                  AttributionTouch[]
+  attributionTokens                   AttributionToken[]
+  leads                               Lead[]
+  leadAttributions                    LeadAttribution[]
+  trackingIngestionEvents             TrackingIngestionEvent[]
+  leadOutcomes                        LeadOutcome[]
+  leadOutcomeEvents                   LeadOutcomeEvent[]
+  externalOutcomeIntegrations         ExternalOutcomeIntegration[]
+  externalOutcomeEvents               ExternalOutcomeEvent[]
+  externalLeadLinks                   ExternalLeadLink[]
+  outcomeImports                      OutcomeImport[]
+  billingCustomer                     BillingCustomer?
+  billingSubscription                 BillingSubscription?
+  billingCheckoutSessions             BillingCheckoutSession[]
+  billingAuditEvents                  BillingAuditEvent[]
+  onboarding                          OrganizationOnboarding?
+  entitlementOverrides                OrganizationEntitlementOverride[]
+
+  @@index([createdAt])
+  @@index([name])
+  @@index([manualSuspendedAt])
 }
 
 model OrganizationMember {
@@ -233,9 +419,24 @@ model Website {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  monitors                    Monitor[]
-  googleAdsDestinationTargets GoogleAdsDestinationTarget[]
+  organization                        Organization                         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  monitors                            Monitor[]
+  googleAdsDestinationTargets         GoogleAdsDestinationTarget[]
+  trackingConfig                      WebsiteTrackingConfig?
+  attributionVisitors                 AttributionVisitor[]
+  attributionSessions                 AttributionSession[]
+  attributionTouches                  AttributionTouch[]
+  attributionTokens                   AttributionToken[]
+  leads                               Lead[]
+  leadAttributions                    LeadAttribution[]
+  trackingIngestionEvents             TrackingIngestionEvent[]
+  leadOutcomes                        LeadOutcome[]
+  leadOutcomeEvents                   LeadOutcomeEvent[]
+  outcomeIntegrationWebsites          ExternalOutcomeIntegrationWebsite[]
+  googleAdsConversionFeedbackConfig   GoogleAdsConversionFeedbackConfig?
+  googleAdsConversionExports          GoogleAdsConversionExport[]
+  googleAdsAnalyticsConfig            GoogleAdsAnalyticsConfig?
+  googleAdsLeadAttributionResolutions GoogleAdsLeadAttributionResolution[]
 
   @@unique([organizationId, normalizedUrl])
   @@index([organizationId])
@@ -755,35 +956,139 @@ enum GoogleAdsSyncRunStatus {
   FAILED
 }
 
+enum GoogleAdsDataManagerStatus {
+  NOT_CONFIGURED
+  READY
+  REAUTH_REQUIRED
+  ERROR
+}
+
+enum GoogleAdsConversionFeedbackStatus {
+  DRAFT
+  NEEDS_REAUTH
+  NEEDS_ACTION
+  READY
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum GoogleAdsConversionEventSource {
+  WEB
+  APP
+  IN_STORE
+  PHONE
+  MESSAGE
+  OTHER
+}
+
+enum GoogleAdsConversionValuePolicy {
+  REVENUE_IF_AVAILABLE
+  REQUIRE_REVENUE
+  NO_VALUE
+}
+
+enum GoogleAdsConversionExportStatus {
+  PENDING
+  BLOCKED
+  READY
+  SUBMITTING
+  PROCESSING
+  SUCCEEDED
+  REJECTED
+  RETRYABLE_ERROR
+  NEEDS_REVIEW
+  CANCELLED
+  OUT_OF_SYNC
+}
+
+enum GoogleAdsConversionExportAttemptKind {
+  SUBMIT
+  STATUS
+}
+
+enum GoogleAdsConversionOutOfSyncReason {
+  REVENUE_CHANGED_AFTER_EXPORT
+  OUTCOME_REVERSED_AFTER_EXPORT
+}
+
+enum GoogleAdsAnalyticsConfigStatus {
+  DRAFT
+  ACTIVE
+  DISABLED
+  NEEDS_REAUTH
+  ERROR
+}
+
+enum GoogleAdsAnalyticsSyncKind {
+  RECENT
+  BACKFILL
+  MANUAL
+}
+
+enum GoogleAdsAnalyticsSyncRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum GoogleAdsPerformanceDimension {
+  ACCOUNT
+  CAMPAIGN
+}
+
+enum GoogleAdsLeadAttributionResolutionStatus {
+  PENDING
+  ACCOUNT_RESOLVED
+  CAMPAIGN_RESOLVED
+  UNSUPPORTED_IDENTIFIER
+  NOT_FOUND
+  OUTSIDE_LOOKBACK
+  AMBIGUOUS
+  ERROR
+}
+
+enum GoogleAdsLeadAttributionResolutionMethod {
+  GCLID_CLICK_VIEW
+  WEBSITE_ACCOUNT_MAPPING
+  UNRESOLVED
+}
+
 /// One Google Ads OAuth connection per organization. Refresh tokens are encrypted at rest.
 model GoogleAdsConnection {
-  id                    String                    @id @default(cuid())
-  organizationId        String                    @unique
-  status                GoogleAdsConnectionStatus @default(CONNECTED)
+  id                    String                     @id @default(cuid())
+  organizationId        String                     @unique
+  status                GoogleAdsConnectionStatus  @default(CONNECTED)
   encryptedRefreshToken String?
-  credentialVersion     Int                       @default(1)
+  credentialVersion     Int                        @default(1)
   googleAccountEmail    String?
+  grantedScopes         String?
+  dataManagerStatus     GoogleAdsDataManagerStatus @default(NOT_CONFIGURED)
   lastSuccessfulSyncAt  DateTime?
   lastSyncAttemptAt     DateTime?
   lastSyncErrorCode     String?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
 
-  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customers    GoogleAdsCustomer[]
+  organization              Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customers                 GoogleAdsCustomer[]
+  conversionFeedbackConfigs GoogleAdsConversionFeedbackConfig[]
+  analyticsConfigs          GoogleAdsAnalyticsConfig[]
 
   @@index([status])
 }
 
 /// Single-use OAuth state bound to organization and initiating user.
 model GoogleAdsOAuthState {
-  id             String    @id @default(cuid())
-  stateHash      String    @unique
-  organizationId String
-  userId         String
-  expiresAt      DateTime
-  consumedAt     DateTime?
-  createdAt      DateTime  @default(now())
+  id              String    @id @default(cuid())
+  stateHash       String    @unique
+  organizationId  String
+  userId          String
+  intent          String    @default("connect")
+  requestedScopes String    @default("https://www.googleapis.com/auth/adwords")
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  createdAt       DateTime  @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -811,12 +1116,18 @@ model GoogleAdsCustomer {
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
 
-  organization    Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  connection      GoogleAdsConnection             @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  destinations    GoogleAdsDestinationTarget[]
-  references      GoogleAdsDestinationReference[]
-  syncRuns        GoogleAdsSyncRun[]
-  incidentImpacts GoogleAdsIncidentImpact[]
+  organization               Organization                         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection                 GoogleAdsConnection                  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  destinations               GoogleAdsDestinationTarget[]
+  references                 GoogleAdsDestinationReference[]
+  syncRuns                   GoogleAdsSyncRun[]
+  incidentImpacts            GoogleAdsIncidentImpact[]
+  conversionFeedbackConfigs  GoogleAdsConversionFeedbackConfig[]
+  conversionActionCaches     GoogleAdsConversionActionCache[]
+  analyticsConfigs           GoogleAdsAnalyticsConfig[]
+  performanceDaily           GoogleAdsPerformanceDaily[]
+  analyticsSyncRuns          GoogleAdsAnalyticsSyncRun[]
+  leadAttributionResolutions GoogleAdsLeadAttributionResolution[]
 
   @@unique([connectionId, googleCustomerId])
   @@index([organizationId])
@@ -1045,4 +1356,925 @@ model GoogleAdsIncidentImpactSource {
 
   @@unique([impactId, sourceType, sourceEntityId])
   @@index([impactId])
+}
+
+model WebsiteTrackingConfig {
+  id                        String               @id @default(cuid())
+  organizationId            String
+  websiteId                 String               @unique
+  status                    TrackingConfigStatus @default(DISABLED)
+  consentMode               TrackingConsentMode  @default(REQUIRED)
+  attributionWindowDays     Int                  @default(90)
+  sessionTimeoutMinutes     Int                  @default(30)
+  publicSiteKeyHash         String               @unique
+  publicSiteKey             String
+  previousPublicSiteKeyHash String?
+  previousSiteKeyExpiresAt  DateTime?
+  serverIngestionSecretHash String?              @unique
+  lastEventReceivedAt       DateTime?
+  lastAttributionReceivedAt DateTime?
+  lastLeadReceivedAt        DateTime?
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([previousPublicSiteKeyHash])
+}
+
+model AttributionVisitor {
+  id              String   @id @default(cuid())
+  organizationId  String
+  websiteId       String
+  publicVisitorId String
+  firstSeenAt     DateTime
+  lastSeenAt      DateTime
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website              @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  sessions     AttributionSession[]
+  touches      AttributionTouch[]
+  tokens       AttributionToken[]
+  leads        Lead[]
+  attributions LeadAttribution[]
+
+  @@unique([websiteId, publicVisitorId])
+  @@index([organizationId])
+  @@index([expiresAt])
+  @@index([websiteId, lastSeenAt])
+}
+
+model AttributionSession {
+  id              String    @id @default(cuid())
+  organizationId  String
+  websiteId       String
+  visitorId       String
+  publicSessionId String
+  startedAt       DateTime
+  lastSeenAt      DateTime
+  endedAt         DateTime?
+  landingOrigin   String?
+  landingPath     String?
+  referrerDomain  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website            @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  visitor      AttributionVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  touches      AttributionTouch[]
+  tokens       AttributionToken[]
+  leads        Lead[]
+  attributions LeadAttribution[]
+
+  @@unique([websiteId, publicSessionId])
+  @@index([visitorId, publicSessionId])
+  @@index([lastSeenAt])
+  @@index([organizationId])
+}
+
+model AttributionTouch {
+  id              String             @id @default(cuid())
+  organizationId  String
+  websiteId       String
+  visitorId       String
+  sessionId       String
+  capturedAt      DateTime
+  channel         AttributionChannel
+  encryptedGclid  String?
+  encryptedGbraid String?
+  encryptedWbraid String?
+  gclidHash       String?
+  gbraidHash      String?
+  wbraidHash      String?
+  hasGclid        Boolean            @default(false)
+  hasGbraid       Boolean            @default(false)
+  hasWbraid       Boolean            @default(false)
+  landingOrigin   String?
+  landingPath     String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  utmTerm         String?
+  createdAt       DateTime           @default(now())
+  expiresAt       DateTime
+
+  organization             Organization                         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website                  Website                              @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  visitor                  AttributionVisitor                   @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  session                  AttributionSession                   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  firstForLeads            LeadAttribution[]                    @relation("LeadFirstTouch")
+  primaryForLeads          LeadAttribution[]                    @relation("LeadPrimaryTouch")
+  googleAdsLeadResolutions GoogleAdsLeadAttributionResolution[]
+
+  @@index([visitorId, capturedAt])
+  @@index([websiteId, capturedAt])
+  @@index([expiresAt])
+  @@index([organizationId])
+  @@index([gclidHash])
+  @@index([gbraidHash])
+  @@index([wbraidHash])
+}
+
+model AttributionToken {
+  id             String    @id @default(cuid())
+  organizationId String
+  websiteId      String
+  visitorId      String
+  sessionId      String
+  tokenHash      String    @unique
+  issuedAt       DateTime
+  expiresAt      DateTime
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website            @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  visitor      AttributionVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  session      AttributionSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([websiteId])
+  @@index([organizationId])
+}
+
+model Lead {
+  id             String     @id @default(cuid())
+  organizationId String
+  websiteId      String
+  publicLeadId   String     @unique
+  source         LeadSource
+  occurredAt     DateTime
+  receivedAt     DateTime
+  eventId        String
+  externalLeadId String?
+  visitorId      String?
+  sessionId      String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization                       Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website                            Website                             @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  visitor                            AttributionVisitor?                 @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  session                            AttributionSession?                 @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  attribution                        LeadAttribution?
+  outcome                            LeadOutcome?
+  externalLeadLinks                  ExternalLeadLink[]
+  externalOutcomeEvents              ExternalOutcomeEvent[]
+  googleAdsConversionExports         GoogleAdsConversionExport[]
+  googleAdsLeadAttributionResolution GoogleAdsLeadAttributionResolution?
+
+  @@unique([websiteId, eventId])
+  @@unique([websiteId, source, externalLeadId])
+  @@index([organizationId, occurredAt])
+  @@index([websiteId, occurredAt])
+}
+
+model LeadAttribution {
+  id                String                @id @default(cuid())
+  leadId            String                @unique
+  organizationId    String
+  websiteId         String
+  visitorId         String?
+  sessionId         String?
+  firstTouchId      String?
+  primaryTouchId    String?
+  attributionModel  LeadAttributionModel  @default(LAST_ELIGIBLE_PAID_TOUCH)
+  attributionStatus LeadAttributionStatus
+  finalizedAt       DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  organization                       Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website                            Website                             @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  lead                               Lead                                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  visitor                            AttributionVisitor?                 @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  session                            AttributionSession?                 @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  firstTouch                         AttributionTouch?                   @relation("LeadFirstTouch", fields: [firstTouchId], references: [id], onDelete: SetNull)
+  primaryTouch                       AttributionTouch?                   @relation("LeadPrimaryTouch", fields: [primaryTouchId], references: [id], onDelete: SetNull)
+  googleAdsConversionExports         GoogleAdsConversionExport[]
+  googleAdsLeadAttributionResolution GoogleAdsLeadAttributionResolution?
+
+  @@index([organizationId])
+  @@index([websiteId])
+  @@index([attributionStatus, finalizedAt])
+}
+
+model LeadOutcome {
+  id                  String             @id @default(cuid())
+  organizationId      String
+  websiteId           String
+  leadId              String             @unique
+  status              LeadOutcomeStatus  @default(NEW)
+  statusChangedAt     DateTime
+  qualifiedAt         DateTime?
+  wonAt               DateTime?
+  lostAt              DateTime?
+  revenueAmountMinor  BigInt?
+  revenueCurrencyCode String?
+  revenueSource       LeadOutcomeSource?
+  revenueUpdatedAt    DateTime?
+  version             Int                @default(1)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  organization               Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website                    Website                     @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  lead                       Lead                        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  events                     LeadOutcomeEvent[]
+  googleAdsConversionExports GoogleAdsConversionExport[]
+
+  @@index([organizationId, status])
+  @@index([websiteId, status])
+  @@index([statusChangedAt])
+  @@index([organizationId, status, revenueCurrencyCode])
+}
+
+model LeadOutcomeEvent {
+  id                        String                @id @default(cuid())
+  organizationId            String
+  websiteId                 String
+  leadId                    String
+  outcomeId                 String
+  mutationId                String
+  version                   Int
+  changeType                LeadOutcomeChangeType
+  beforeStatus              LeadOutcomeStatus?
+  afterStatus               LeadOutcomeStatus
+  beforeRevenueAmountMinor  BigInt?
+  afterRevenueAmountMinor   BigInt?
+  beforeRevenueCurrencyCode String?
+  afterRevenueCurrencyCode  String?
+  source                    LeadOutcomeSource
+  actorType                 LeadOutcomeActorType
+  actorUserId               String?
+  sourceSystem              String?
+  sourceRecordId            String?
+  sourceEventId             String?
+  effectiveAt               DateTime
+  createdAt                 DateTime              @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  outcome      LeadOutcome  @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@unique([outcomeId, mutationId])
+  @@index([outcomeId, createdAt])
+  @@index([leadId, createdAt])
+  @@index([organizationId])
+}
+
+model TrackingIngestionEvent {
+  id             String                  @id @default(cuid())
+  organizationId String
+  websiteId      String
+  eventId        String
+  type           TrackingIngestionType
+  status         TrackingIngestionStatus
+  receivedAt     DateTime
+  processedAt    DateTime?
+  createdAt      DateTime                @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@unique([websiteId, eventId])
+  @@index([organizationId])
+  @@index([receivedAt])
+}
+
+model ExternalOutcomeIntegration {
+  id                          String                           @id @default(cuid())
+  organizationId              String
+  name                        String
+  type                        ExternalOutcomeIntegrationType
+  status                      ExternalOutcomeIntegrationStatus @default(ENABLED)
+  authMode                    ExternalOutcomeAuthMode          @default(BEARER)
+  sourceSystem                String
+  credentialHash              String                           @unique
+  credentialPrefix            String
+  previousCredentialHash      String?                          @unique
+  previousCredentialExpiresAt DateTime?
+  signingSecretHash           String?
+  signingSecretCiphertext     String?
+  lastEventReceivedAt         DateTime?
+  lastAppliedAt               DateTime?
+  createdAt                   DateTime                         @default(now())
+  updatedAt                   DateTime                         @updatedAt
+
+  organization Organization                        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  websites     ExternalOutcomeIntegrationWebsite[]
+  events       ExternalOutcomeEvent[]
+  links        ExternalLeadLink[]
+  imports      OutcomeImport[]
+
+  @@index([organizationId, status])
+}
+
+model ExternalOutcomeIntegrationWebsite {
+  id             String @id @default(cuid())
+  integrationId  String
+  websiteId      String
+  organizationId String
+
+  integration ExternalOutcomeIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  website     Website                    @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, websiteId])
+  @@index([websiteId])
+}
+
+model ExternalLeadLink {
+  id                       String                  @id @default(cuid())
+  organizationId           String
+  integrationId            String
+  leadId                   String
+  sourceSystem             String
+  sourceRecordId           String
+  matchMethod              ExternalLeadMatchMethod
+  lastAppliedEffectiveAt   DateTime?
+  lastAppliedSourceEventId String?
+  lastAppliedSourceVersion Int?
+  linkedByUserId           String?
+  linkedAt                 DateTime                @default(now())
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration  ExternalOutcomeIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  lead         Lead                       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, sourceRecordId])
+  @@index([leadId])
+  @@index([organizationId])
+}
+
+model ExternalOutcomeEvent {
+  id                    String                     @id @default(cuid())
+  organizationId        String
+  integrationId         String
+  sourceSystem          String
+  sourceEventId         String
+  sourceRecordId        String?
+  sourceVersion         Int?
+  externalLeadId        String?
+  publicLeadId          String?
+  normalizedStatus      LeadOutcomeStatus?
+  effectiveAt           DateTime?
+  revenueAmountMinor    BigInt?
+  revenueCurrencyCode   String?
+  hasRevenue            Boolean                    @default(false)
+  status                ExternalOutcomeEventStatus @default(RECEIVED)
+  matchMethod           ExternalLeadMatchMethod?
+  matchedLeadId         String?
+  appliedOutcomeEventId String?
+  errorCode             String?
+  receivedAt            DateTime
+  processedAt           DateTime?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration  ExternalOutcomeIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  matchedLead  Lead?                      @relation(fields: [matchedLeadId], references: [id], onDelete: SetNull)
+
+  @@unique([integrationId, sourceEventId])
+  @@index([organizationId, status])
+  @@index([integrationId, sourceRecordId])
+  @@index([matchedLeadId])
+  @@index([integrationId, sourceRecordId, effectiveAt])
+}
+
+model OutcomeImport {
+  id              String                @id @default(cuid())
+  organizationId  String
+  integrationId   String
+  createdByUserId String
+  fileName        String
+  fileType        OutcomeImportFileType
+  storageKey      String
+  mappingJson     String
+  status          OutcomeImportStatus   @default(UPLOADED)
+  totalRows       Int                   @default(0)
+  processedRows   Int                   @default(0)
+  appliedRows     Int                   @default(0)
+  unmatchedRows   Int                   @default(0)
+  rejectedRows    Int                   @default(0)
+  staleRows       Int                   @default(0)
+  conflictRows    Int                   @default(0)
+  duplicateRows   Int                   @default(0)
+  errorMessage    String?
+  createdAt       DateTime              @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  updatedAt       DateTime              @updatedAt
+
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration  ExternalOutcomeIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  createdBy    User                       @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  rows         OutcomeImportRow[]
+
+  @@index([organizationId, createdAt])
+  @@index([status])
+}
+
+model OutcomeImportRow {
+  id            String                     @id @default(cuid())
+  importId      String
+  rowNumber     Int
+  sourceEventId String
+  status        ExternalOutcomeEventStatus @default(RECEIVED)
+  errorCode     String?
+  matchedLeadId String?
+  createdAt     DateTime                   @default(now())
+
+  import OutcomeImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@unique([importId, rowNumber])
+  @@index([importId, status])
+}
+
+/// Cached Conversion Action metadata from read-only Google Ads discovery.
+model GoogleAdsConversionActionCache {
+  id                             String   @id @default(cuid())
+  organizationId                 String
+  googleAdsCustomerId            String
+  conversionActionId             String
+  name                           String
+  status                         String
+  type                           String
+  category                       String?
+  countingType                   String?
+  clickThroughLookbackWindowDays Int?
+  syncedAt                       DateTime
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     GoogleAdsCustomer @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+
+  @@unique([googleAdsCustomerId, conversionActionId])
+  @@index([organizationId])
+}
+
+/// Explicit Website → Google Ads customer → Conversion Action mapping for WON feedback.
+model GoogleAdsConversionFeedbackConfig {
+  id                           String                            @id @default(cuid())
+  organizationId               String
+  websiteId                    String                            @unique
+  googleAdsConnectionId        String
+  googleAdsCustomerId          String
+  conversionActionId           String
+  conversionActionNameSnapshot String
+  conversionActionTypeSnapshot String?
+  conversionActionCountingType String?
+  clickThroughLookbackDays     Int?
+  status                       GoogleAdsConversionFeedbackStatus @default(DRAFT)
+  eventSource                  GoogleAdsConversionEventSource
+  valuePolicy                  GoogleAdsConversionValuePolicy
+  verifiedAt                   DateTime?
+  enabledAt                    DateTime?
+  disabledAt                   DateTime?
+  lastErrorCode                String?
+  createdAt                    DateTime                          @default(now())
+  updatedAt                    DateTime                          @updatedAt
+
+  organization Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website                     @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  connection   GoogleAdsConnection         @relation(fields: [googleAdsConnectionId], references: [id], onDelete: Cascade)
+  customer     GoogleAdsCustomer           @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+  exports      GoogleAdsConversionExport[]
+
+  @@index([organizationId, status])
+  @@index([googleAdsConnectionId])
+  @@index([googleAdsCustomerId])
+}
+
+/// One Google conversion export per Lead + Conversion Action.
+model GoogleAdsConversionExport {
+  id                   String                              @id @default(cuid())
+  organizationId       String
+  websiteId            String
+  leadId               String
+  leadOutcomeId        String
+  leadAttributionId    String
+  configId             String
+  googleAdsCustomerId  String
+  conversionActionId   String
+  transactionId        String                              @unique
+  status               GoogleAdsConversionExportStatus     @default(PENDING)
+  blockReason          String?
+  outOfSyncReason      GoogleAdsConversionOutOfSyncReason?
+  conversionTimestamp  DateTime
+  valueAmountMinor     BigInt?
+  currencyCode         String?
+  identifierTypes      String
+  eventSource          GoogleAdsConversionEventSource
+  dataManagerRequestId String?                             @unique
+  attemptCount         Int                                 @default(0)
+  nextAttemptAt        DateTime?
+  submittedAt          DateTime?
+  lastStatusCheckedAt  DateTime?
+  completedAt          DateTime?
+  lastErrorCode        String?
+  lastErrorCategory    String?
+  lastWarningCodes     String?
+  snapshotLockedAt     DateTime?
+  createdAt            DateTime                            @default(now())
+  updatedAt            DateTime                            @updatedAt
+
+  organization Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website                            @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  lead         Lead                               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  outcome      LeadOutcome                        @relation(fields: [leadOutcomeId], references: [id], onDelete: Cascade)
+  attribution  LeadAttribution                    @relation(fields: [leadAttributionId], references: [id], onDelete: Cascade)
+  config       GoogleAdsConversionFeedbackConfig  @relation(fields: [configId], references: [id], onDelete: Restrict)
+  attempts     GoogleAdsConversionExportAttempt[]
+
+  @@unique([leadId, conversionActionId])
+  @@index([status, nextAttemptAt])
+  @@index([organizationId, createdAt])
+  @@index([configId, status])
+  @@index([leadId])
+  @@index([websiteId, status])
+}
+
+model GoogleAdsConversionExportAttempt {
+  id                   String                               @id @default(cuid())
+  exportId             String
+  attemptNumber        Int
+  kind                 GoogleAdsConversionExportAttemptKind
+  dataManagerRequestId String?
+  errorCode            String?
+  errorCategory        String?
+  createdAt            DateTime                             @default(now())
+
+  export GoogleAdsConversionExport @relation(fields: [exportId], references: [id], onDelete: Cascade)
+
+  @@index([exportId, createdAt])
+}
+
+/// Explicit Website → Google Ads customer mapping for revenue analytics (read-only).
+model GoogleAdsAnalyticsConfig {
+  id                    String                         @id @default(cuid())
+  organizationId        String
+  websiteId             String                         @unique
+  googleAdsConnectionId String
+  googleAdsCustomerId   String
+  status                GoogleAdsAnalyticsConfigStatus @default(DRAFT)
+  enabledAt             DateTime?
+  disabledAt            DateTime?
+  lastSuccessfulSyncAt  DateTime?
+  lastSyncAttemptAt     DateTime?
+  lastManualRefreshAt   DateTime?
+  lastBackfillAt        DateTime?
+  nextSyncAt            DateTime?
+  lastErrorCode         String?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+
+  organization Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website      Website                     @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  connection   GoogleAdsConnection         @relation(fields: [googleAdsConnectionId], references: [id], onDelete: Cascade)
+  customer     GoogleAdsCustomer           @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+  syncRuns     GoogleAdsAnalyticsSyncRun[]
+
+  @@index([organizationId, status])
+  @@index([googleAdsCustomerId, status])
+  @@index([status, nextSyncAt])
+  @@index([googleAdsConnectionId])
+}
+
+/// Daily Google Ads reported performance. ACCOUNT rows use campaignId = "".
+model GoogleAdsPerformanceDaily {
+  id                     String                        @id @default(cuid())
+  organizationId         String
+  googleAdsCustomerId    String
+  date                   DateTime                      @db.Date
+  dimensionType          GoogleAdsPerformanceDimension
+  campaignId             String                        @default("")
+  campaignNameSnapshot   String?
+  campaignStatus         String?
+  advertisingChannelType String?
+  costMicros             BigInt
+  clicks                 BigInt
+  impressions            BigInt
+  currencyCode           String
+  customerTimeZone       String
+  syncRunId              String?
+  lastSyncedAt           DateTime
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     GoogleAdsCustomer @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+
+  @@unique([googleAdsCustomerId, date, dimensionType, campaignId])
+  @@index([googleAdsCustomerId, date])
+  @@index([googleAdsCustomerId, campaignId, date])
+  @@index([organizationId, date])
+}
+
+model GoogleAdsAnalyticsSyncRun {
+  id                  String                          @id @default(cuid())
+  organizationId      String
+  googleAdsCustomerId String
+  configId            String?
+  kind                GoogleAdsAnalyticsSyncKind
+  status              GoogleAdsAnalyticsSyncRunStatus @default(RUNNING)
+  rangeFrom           DateTime                        @db.Date
+  rangeThrough        DateTime                        @db.Date
+  accountRows         Int                             @default(0)
+  campaignRows        Int                             @default(0)
+  startedAt           DateTime                        @default(now())
+  completedAt         DateTime?
+  errorCode           String?
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     GoogleAdsCustomer         @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+  config       GoogleAdsAnalyticsConfig? @relation(fields: [configId], references: [id], onDelete: SetNull)
+
+  @@index([googleAdsCustomerId, startedAt])
+  @@index([organizationId, startedAt])
+  @@index([status, startedAt])
+}
+
+/// Primary-touch Google Ads campaign resolution. No raw click identifiers.
+model GoogleAdsLeadAttributionResolution {
+  id                   String                                   @id @default(cuid())
+  organizationId       String
+  websiteId            String
+  leadId               String                                   @unique
+  leadAttributionId    String                                   @unique
+  attributionTouchId   String
+  googleAdsCustomerId  String
+  status               GoogleAdsLeadAttributionResolutionStatus @default(PENDING)
+  resolutionMethod     GoogleAdsLeadAttributionResolutionMethod @default(UNRESOLVED)
+  acquisitionAt        DateTime
+  googleClickDate      DateTime?                                @db.Date
+  campaignId           String?
+  campaignNameSnapshot String?
+  adGroupId            String?
+  adGroupNameSnapshot  String?
+  adId                 String?
+  keywordCriterionId   String?
+  keywordTextSnapshot  String?
+  keywordMatchType     String?
+  attemptCount         Int                                      @default(0)
+  nextAttemptAt        DateTime?
+  resolvedAt           DateTime?
+  lastAttemptAt        DateTime?
+  errorCode            String?
+  createdAt            DateTime                                 @default(now())
+  updatedAt            DateTime                                 @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  website          Website           @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  lead             Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  attribution      LeadAttribution   @relation(fields: [leadAttributionId], references: [id], onDelete: Cascade)
+  attributionTouch AttributionTouch  @relation(fields: [attributionTouchId], references: [id], onDelete: Restrict)
+  customer         GoogleAdsCustomer @relation(fields: [googleAdsCustomerId], references: [id], onDelete: Cascade)
+
+  @@index([googleAdsCustomerId, campaignId])
+  @@index([status, nextAttemptAt])
+  @@index([attributionTouchId])
+  @@index([organizationId, status])
+  @@index([websiteId])
+}
+
+enum BillingProvider {
+  STRIPE
+  FAKE
+  INTERNAL
+}
+
+enum BillingPlanKey {
+  STARTER
+  GROWTH
+  PRO
+  AGENCY
+  LEGACY
+}
+
+enum BillingSubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  GRACE_PERIOD
+  CANCELED
+  SUSPENDED
+  INCOMPLETE
+  TRIAL_EXPIRED
+  NEEDS_REVIEW
+}
+
+enum BillingProviderEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum BillingCheckoutSessionStatus {
+  OPEN
+  COMPLETED
+  EXPIRED
+}
+
+enum WorkerHeartbeatType {
+  WEB
+  SCHEDULER
+  HTTP
+  BROWSER
+  NOTIFICATION
+  GOOGLE_ADS
+}
+
+/// Stripe/fake customer for one Organization. No card data.
+model BillingCustomer {
+  id                 String          @id @default(cuid())
+  organizationId     String          @unique
+  provider           BillingProvider
+  providerCustomerId String          @unique
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  organization  Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptions BillingSubscription[]
+  checkouts     BillingCheckoutSession[]
+
+  @@index([provider, providerCustomerId])
+}
+
+/// Local projection of the Organization's primary subscription.
+model BillingSubscription {
+  id                     String                    @id @default(cuid())
+  organizationId         String                    @unique
+  billingCustomerId      String?
+  provider               BillingProvider
+  providerSubscriptionId String                    @unique
+  planKey                BillingPlanKey
+  status                 BillingSubscriptionStatus
+  providerStatus         String?
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  trialStart             DateTime?
+  trialEnd               DateTime?
+  graceDeadlineAt        DateTime?
+  cancelAtPeriodEnd      Boolean                   @default(false)
+  canceledAt             DateTime?
+  endedAt                DateTime?
+  priceId                String?
+  quantity               Int                       @default(1)
+  lastStripeEventAt      DateTime?
+  lastReconciledAt       DateTime?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     BillingCustomer? @relation(fields: [billingCustomerId], references: [id], onDelete: SetNull)
+
+  @@index([status, currentPeriodEnd])
+  @@index([provider, status])
+}
+
+model BillingProviderEvent {
+  id              String                     @id @default(cuid())
+  provider        BillingProvider
+  providerEventId String                     @unique
+  type            String
+  status          BillingProviderEventStatus @default(RECEIVED)
+  eventCreatedAt  DateTime?
+  receivedAt      DateTime                   @default(now())
+  processedAt     DateTime?
+  errorCode       String?
+  organizationId  String?
+
+  @@index([status, receivedAt])
+  @@index([type, receivedAt])
+}
+
+model BillingCheckoutSession {
+  id                String                       @id @default(cuid())
+  organizationId    String
+  billingCustomerId String?
+  planKey           BillingPlanKey
+  provider          BillingProvider
+  providerSessionId String                       @unique
+  status            BillingCheckoutSessionStatus @default(OPEN)
+  idempotencyKey    String                       @unique
+  expiresAt         DateTime
+  completedAt       DateTime?
+  createdByUserId   String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     BillingCustomer? @relation(fields: [billingCustomerId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+}
+
+model BillingAuditEvent {
+  id              String   @id @default(cuid())
+  organizationId  String
+  actorUserId     String?
+  action          String
+  planKey         String?
+  providerEventId String?
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+model OrganizationOnboarding {
+  organizationId          String    @id
+  websiteCompletedAt      DateTime?
+  monitorCompletedAt      DateTime?
+  notificationCompletedAt DateTime?
+  firstCheckCompletedAt   DateTime?
+  completedAt             DateTime?
+  dismissedAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model WorkerHeartbeat {
+  id         String              @id @default(cuid())
+  workerType WorkerHeartbeatType
+  instanceId String
+  lastSeenAt DateTime
+  version    String?
+  metadata   String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([workerType, instanceId])
+  @@index([workerType, lastSeenAt])
+}
+
+/// Platform-level access. Independent of OrganizationMember.role.
+model PlatformAccess {
+  id              String               @id @default(cuid())
+  userId          String               @unique
+  role            PlatformRole
+  status          PlatformAccessStatus @default(ACTIVE)
+  createdByUserId String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([role, status])
+}
+
+model PlatformAuditEvent {
+  id                String   @id @default(cuid())
+  actorUserId       String?
+  actorPlatformRole String?
+  action            String
+  targetType        String
+  targetId          String
+  organizationId    String?
+  reason            String?
+  metadata          String?
+  createdAt         DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([organizationId, createdAt])
+  @@index([action, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+/// Explicit feature/limit override. Never a plan-string hack.
+model OrganizationEntitlementOverride {
+  id              String    @id @default(cuid())
+  organizationId  String
+  featureKey      String?
+  limitKey        String?
+  booleanValue    Boolean?
+  integerValue    Int?
+  reason          String
+  expiresAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, expiresAt])
 }

@@ -7,6 +7,8 @@ import { getOrganizationDashboardStats } from "@/server/incidents/service";
 import { checkIncidentHeadline } from "@/lib/monitoring/display";
 import { formatDuration, incidentDurationMs } from "@/lib/incidents/duration";
 import { formatCurrencyFromMicros } from "@/lib/google-ads/money";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { getOrganizationOnboarding } from "@/server/billing/onboarding";
 
 export const metadata = { title: "Dashboard" };
 
@@ -23,6 +25,7 @@ export default async function OrganizationDashboardPage({
   }
   const context = access.context;
   const stats = await getOrganizationDashboardStats(user.id, organizationSlug);
+  const onboarding = await getOrganizationOnboarding(context.organization.id);
   const canManage = hasOrganizationPermission(
     context.membership.role,
     "websites:manage",
@@ -37,6 +40,10 @@ export default async function OrganizationDashboardPage({
         Live counts for {context.organization.name}. Incidents open only after
         consecutive failed checks.
       </p>
+      <OnboardingChecklist
+        organizationSlug={organizationSlug}
+        state={onboarding}
+      />
       <section
         className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
         aria-label="Kerncijfers"

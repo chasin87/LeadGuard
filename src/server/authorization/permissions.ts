@@ -15,6 +15,10 @@ export const organizationPermissions = {
   "notifications:manage": ["OWNER", "ADMIN"],
   "integrations:read": ["OWNER", "ADMIN", "MEMBER"],
   "integrations:manage": ["OWNER", "ADMIN"],
+  "leads:read": ["OWNER", "ADMIN", "MEMBER"],
+  "leads:manage": ["OWNER", "ADMIN"],
+  "billing:read": ["OWNER", "ADMIN", "MEMBER"],
+  "billing:manage": ["OWNER"],
 } as const;
 
 export type OrganizationPermission = keyof typeof organizationPermissions;

@@ -141,3 +141,4 @@ Browser Monitoring zelf doet geen:
 - AI op screenshots
 - billing / plantiers
 - Google Ads writes; destination health is HTTP monitoring, zie [Google Ads](GOOGLE_ADS.md)
+- revenue attribution; elke isolated context zet `window.__LEADGUARD_MONITORING__` zodat de Tracking SDK no-op’t

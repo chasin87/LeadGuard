@@ -122,6 +122,68 @@ export type GoogleAdsReadProvider = {
     googleCustomerId: string,
     range: GoogleAdsMetricDateRange,
   ): Promise<GoogleAdsDailyLandingPageMetric[]>;
+  listConversionActions(
+    session: GoogleAdsReadSession,
+    googleCustomerId: string,
+  ): Promise<GoogleAdsConversionActionRow[]>;
+  getCustomerDailyPerformance(
+    session: GoogleAdsReadSession,
+    googleCustomerId: string,
+    range: GoogleAdsMetricDateRange,
+  ): Promise<GoogleAdsCustomerDailyPerformanceRow[]>;
+  getCampaignDailyPerformance(
+    session: GoogleAdsReadSession,
+    googleCustomerId: string,
+    range: GoogleAdsMetricDateRange,
+  ): Promise<GoogleAdsCampaignDailyPerformanceRow[]>;
+  getClickViews(
+    session: GoogleAdsReadSession,
+    googleCustomerId: string,
+    input: { date: string; gclids: string[] },
+  ): Promise<GoogleAdsClickViewRow[]>;
+};
+
+export type GoogleAdsCustomerDailyPerformanceRow = {
+  date: string;
+  costMicros: bigint;
+  clicks: bigint;
+  impressions: bigint;
+};
+
+export type GoogleAdsCampaignDailyPerformanceRow = {
+  date: string;
+  campaignId: string;
+  campaignName: string;
+  campaignStatus: string;
+  advertisingChannelType: string | null;
+  costMicros: bigint;
+  clicks: bigint;
+  impressions: bigint;
+};
+
+export type GoogleAdsClickViewRow = {
+  date: string;
+  gclid: string;
+  campaignId: string | null;
+  campaignName: string | null;
+  campaignStatus: string | null;
+  advertisingChannelType: string | null;
+  adGroupId: string | null;
+  adGroupName: string | null;
+  adId: string | null;
+  keywordCriterionId: string | null;
+  keywordText: string | null;
+  keywordMatchType: string | null;
+};
+
+export type GoogleAdsConversionActionRow = {
+  conversionActionId: string;
+  name: string;
+  status: string;
+  type: string;
+  category: string | null;
+  countingType: string | null;
+  clickThroughLookbackWindowDays: number | null;
 };
 
 export type GoogleAdsOAuthTokenSet = {
@@ -129,6 +191,7 @@ export type GoogleAdsOAuthTokenSet = {
   refreshToken: string | null;
   expiresIn: number | null;
   email: string | null;
+  scope: string | null;
 };
 
 export type GoogleAdsAuthClient = {
@@ -136,6 +199,9 @@ export type GoogleAdsAuthClient = {
     state: string;
     redirectUri: string;
     clientId: string;
+    scopes: string[];
+    includeGrantedScopes: boolean;
+    intent?: "connect" | "data_manager";
   }): string;
   exchangeAuthorizationCode(input: {
     code: string;

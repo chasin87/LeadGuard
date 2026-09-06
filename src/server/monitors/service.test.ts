@@ -267,11 +267,11 @@ describe("scheduler and worker", () => {
       { resolver: publicResolver },
     );
 
-    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const overdue = new Date(0);
     const inAnHour = new Date(Date.now() + 60 * 60 * 1000);
     await database.monitor.update({
       where: { id: due.id },
-      data: { nextCheckAt: threeHoursAgo },
+      data: { nextCheckAt: overdue },
     });
     await database.monitor.update({
       where: { id: future.id },
@@ -299,7 +299,7 @@ describe("scheduler and worker", () => {
     });
     await database.monitor.update({
       where: { id: paused.id },
-      data: { nextCheckAt: threeHoursAgo },
+      data: { nextCheckAt: overdue },
     });
 
     const now = new Date();

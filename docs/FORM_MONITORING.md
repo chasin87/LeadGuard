@@ -89,6 +89,8 @@ PREPARED → (vóór klik) SUBMITTING persist → click → CONFIRMED | FAILED |
 
 Infrastructure retry vóór submit is toegestaan. Na `SUBMITTING` herbiedt de worker dezelfde job **niet** opnieuw. Resultaat: `AMBIGUOUS_SUBMISSION`. Handmatig hertesten kan een tweede testlead maken.
 
+Form-testsubmissions zijn **geen** commerciële `Lead`-records. De Tracking SDK no-op’t wanneer `window.__LEADGUARD_MONITORING__` gezet is. Zie [Revenue attribution](REVENUE_ATTRIBUTION_FOUNDATION.md).
+
 ## Classificatie (hoogste eerst)
 
 ```text

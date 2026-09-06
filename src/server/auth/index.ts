@@ -8,6 +8,7 @@ import {
   verifyPasswordAgainstDummy,
 } from "@/server/auth/password";
 import { createLogger } from "@/server/logger";
+import { database } from "@/server/database";
 
 const logger = createLogger("auth");
 
@@ -26,7 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const user = await findUserForCredentials(parsed.data.email);
-        if (!user?.passwordHash) {
+        if (!user?.passwordHash || user.status !== "ACTIVE") {
           await verifyPasswordAgainstDummy(parsed.data.password);
           logger.info("Login failed");
           return null;
@@ -40,6 +41,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           logger.info("Login failed");
           return null;
         }
+
+        await database.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        });
 
         return { id: user.id, name: user.name, email: user.email };
       },

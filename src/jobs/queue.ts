@@ -14,11 +14,21 @@ import {
   getFormMonitoringConfig,
 } from "@/server/monitoring/form/config";
 import { notificationDeliveryQueue } from "@/server/notifications/config";
+import { outcomeImportQueue } from "@/server/outcomes/queue";
 import {
   getGoogleAdsConfig,
+  googleAdsAnalyticsBackfillQueue,
+  googleAdsAnalyticsSyncQueue,
+  googleAdsClickAttributionQueue,
   googleAdsImpactQueue,
   googleAdsSyncQueue,
 } from "@/server/google-ads/config";
+import {
+  getGoogleDataManagerConfig,
+  googleConversionPlanQueue,
+  googleConversionStatusQueue,
+  googleConversionSubmitQueue,
+} from "@/server/google-data-manager/config";
 
 const logger = createLogger("queue");
 
@@ -41,6 +51,10 @@ export type NotificationDeliveryJobData = {
   deliveryId: string;
 };
 
+export type OutcomeImportJobData = {
+  importId: string;
+};
+
 export type GoogleAdsSyncJobData = {
   connectionId: string;
   googleAdsCustomerId: string;
@@ -49,6 +63,28 @@ export type GoogleAdsSyncJobData = {
 export type GoogleAdsImpactJobData = {
   incidentId: string;
   reason: "open" | "refresh" | "finalize" | "reconcile" | "manual";
+};
+
+export type GoogleConversionPlanJobData = {
+  leadId: string;
+  organizationId: string;
+};
+
+export type GoogleConversionExportJobData = {
+  exportId: string;
+};
+
+export type GoogleAdsAnalyticsSyncJobData = {
+  googleAdsCustomerId: string;
+  organizationId: string;
+  kind: "RECENT" | "BACKFILL" | "MANUAL";
+  days?: number;
+};
+
+export type GoogleAdsClickResolutionJobData = {
+  organizationId: string;
+  googleAdsCustomerId: string;
+  leadId?: string;
 };
 
 async function createMonitorQueue(): Promise<PgBoss> {
@@ -95,6 +131,43 @@ async function createMonitorQueue(): Promise<PgBoss> {
     retryDelay: adsConfig.jobRetryDelaySeconds,
     expireInSeconds: adsConfig.expireInSeconds,
   });
+  const conversionConfig = getGoogleDataManagerConfig();
+  await boss.createQueue(googleConversionPlanQueue, {
+    policy: "exclusive",
+    retryLimit: conversionConfig.maxRetries,
+    retryDelay: conversionConfig.jobRetryDelaySeconds,
+    expireInSeconds: conversionConfig.expireInSeconds,
+  });
+  await boss.createQueue(googleConversionSubmitQueue, {
+    policy: "exclusive",
+    retryLimit: conversionConfig.maxRetries,
+    retryDelay: conversionConfig.jobRetryDelaySeconds,
+    expireInSeconds: conversionConfig.expireInSeconds,
+  });
+  await boss.createQueue(googleConversionStatusQueue, {
+    policy: "exclusive",
+    retryLimit: conversionConfig.maxRetries,
+    retryDelay: conversionConfig.jobRetryDelaySeconds,
+    expireInSeconds: conversionConfig.expireInSeconds,
+  });
+  await boss.createQueue(googleAdsAnalyticsSyncQueue, {
+    policy: "exclusive",
+    retryLimit: 2,
+    retryDelay: adsConfig.jobRetryDelaySeconds,
+    expireInSeconds: adsConfig.expireInSeconds,
+  });
+  await boss.createQueue(googleAdsAnalyticsBackfillQueue, {
+    policy: "exclusive",
+    retryLimit: 2,
+    retryDelay: adsConfig.jobRetryDelaySeconds,
+    expireInSeconds: adsConfig.expireInSeconds,
+  });
+  await boss.createQueue(googleAdsClickAttributionQueue, {
+    policy: "exclusive",
+    retryLimit: adsConfig.clickResolveRetryLimit,
+    retryDelay: adsConfig.clickResolveRetryDelaySeconds,
+    expireInSeconds: adsConfig.expireInSeconds,
+  });
   return boss;
 }
 
@@ -112,6 +185,12 @@ async function createNotificationQueue(): Promise<PgBoss> {
     policy: "exclusive",
     retryLimit: 0,
     expireInSeconds: 60,
+  });
+  await boss.createQueue(outcomeImportQueue, {
+    policy: "exclusive",
+    retryLimit: 5,
+    retryDelay: 30,
+    expireInSeconds: 3600,
   });
   return boss;
 }
@@ -270,6 +349,26 @@ export async function enqueueGoogleAdsImpact(input: {
   return jobId;
 }
 
+export async function enqueueOutcomeImport(input: {
+  importId: string;
+  organizationId: string;
+}): Promise<string | null> {
+  const queue = await getNotificationQueue();
+  const jobId = await queue.send(
+    outcomeImportQueue,
+    { importId: input.importId } satisfies OutcomeImportJobData,
+    { singletonKey: input.importId },
+  );
+  if (jobId) {
+    logger.info("outcome_import.queued", {
+      importId: input.importId,
+      organizationId: input.organizationId,
+      jobId,
+    });
+  }
+  return jobId;
+}
+
 export async function enqueueNotificationDelivery(
   deliveryId: string,
 ): Promise<string | null> {
@@ -283,6 +382,145 @@ export async function enqueueNotificationDelivery(
     logger.info("notification.delivery.queued", {
       deliveryId,
       jobId,
+    });
+  }
+  return jobId;
+}
+
+export async function enqueueGoogleConversionPlan(input: {
+  leadId: string;
+  organizationId: string;
+}): Promise<string | null> {
+  const queue = await getMonitorQueue();
+  const jobId = await queue.send(
+    googleConversionPlanQueue,
+    {
+      leadId: input.leadId,
+      organizationId: input.organizationId,
+    } satisfies GoogleConversionPlanJobData,
+    { singletonKey: input.leadId },
+  );
+  if (jobId) {
+    logger.info("google_conversion.plan.queued", {
+      jobId,
+      leadId: input.leadId,
+      organizationId: input.organizationId,
+    });
+  }
+  return jobId;
+}
+
+export async function enqueueGoogleConversionSubmit(
+  exportId: string,
+  delaySeconds = 0,
+): Promise<string | null> {
+  const queue = await getMonitorQueue();
+  const jobId = await queue.send(
+    googleConversionSubmitQueue,
+    { exportId } satisfies GoogleConversionExportJobData,
+    {
+      singletonKey: exportId,
+      startAfter: delaySeconds > 0 ? delaySeconds : undefined,
+    },
+  );
+  if (jobId) {
+    logger.info("google_conversion.submit.queued", {
+      jobId,
+      exportId,
+    });
+  }
+  return jobId;
+}
+
+export async function enqueueGoogleConversionStatus(
+  exportId: string,
+  delaySeconds = 0,
+): Promise<string | null> {
+  const queue = await getMonitorQueue();
+  const jobId = await queue.send(
+    googleConversionStatusQueue,
+    { exportId } satisfies GoogleConversionExportJobData,
+    {
+      singletonKey: `status:${exportId}`,
+      startAfter: delaySeconds > 0 ? delaySeconds : undefined,
+    },
+  );
+  if (jobId) {
+    logger.info("google_conversion.status.queued", {
+      jobId,
+      exportId,
+    });
+  }
+  return jobId;
+}
+
+export async function enqueueGoogleAdsAnalyticsSync(input: {
+  googleAdsCustomerId: string;
+  organizationId: string;
+  kind?: GoogleAdsAnalyticsSyncJobData["kind"];
+  days?: number;
+}): Promise<string | null> {
+  const queue = await getMonitorQueue();
+  const kind = input.kind ?? "RECENT";
+  const jobId = await queue.send(
+    kind === "BACKFILL"
+      ? googleAdsAnalyticsBackfillQueue
+      : googleAdsAnalyticsSyncQueue,
+    {
+      googleAdsCustomerId: input.googleAdsCustomerId,
+      organizationId: input.organizationId,
+      kind,
+      days: input.days,
+    } satisfies GoogleAdsAnalyticsSyncJobData,
+    {
+      singletonKey: input.googleAdsCustomerId,
+    },
+  );
+  if (jobId) {
+    logger.info("google_ads.analytics.queued", {
+      jobId,
+      customerId: input.googleAdsCustomerId,
+      organizationId: input.organizationId,
+      kind,
+    });
+  }
+  return jobId;
+}
+
+export async function enqueueGoogleAdsAnalyticsBackfill(input: {
+  googleAdsCustomerId: string;
+  organizationId: string;
+  days?: number;
+}): Promise<string | null> {
+  return enqueueGoogleAdsAnalyticsSync({
+    ...input,
+    kind: "BACKFILL",
+  });
+}
+
+export async function enqueueGoogleAdsClickResolution(input: {
+  organizationId: string;
+  googleAdsCustomerId: string;
+  leadId?: string;
+}): Promise<string | null> {
+  const queue = await getMonitorQueue();
+  const jobId = await queue.send(
+    googleAdsClickAttributionQueue,
+    {
+      organizationId: input.organizationId,
+      googleAdsCustomerId: input.googleAdsCustomerId,
+      leadId: input.leadId,
+    } satisfies GoogleAdsClickResolutionJobData,
+    {
+      singletonKey: input.googleAdsCustomerId,
+    },
+  );
+  if (jobId) {
+    logger.info("google_ads.attribution.queued", {
+      jobId,
+      organizationId: input.organizationId,
+      customerId: input.googleAdsCustomerId,
+      leadId: input.leadId ?? null,
     });
   }
   return jobId;

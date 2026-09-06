@@ -14,6 +14,7 @@ export const createOrganizationSchema = z.object({
 
 export const updateOrganizationSchema = z.object({
   name: organizationNameSchema,
+  defaultRevenueCurrencyCode: z.string().trim().max(8).optional(),
 });
 
 export const organizationRoleSchema = z.enum(organizationRoles);

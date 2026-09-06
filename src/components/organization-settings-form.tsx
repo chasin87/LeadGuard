@@ -13,12 +13,14 @@ export function OrganizationSettingsForm({
   organizationSlug,
   name,
   slug,
+  defaultRevenueCurrencyCode,
   role,
   canEdit,
 }: {
   organizationSlug: string;
   name: string;
   slug: string;
+  defaultRevenueCurrencyCode: string | null;
   role: string;
   canEdit: boolean;
 }) {
@@ -56,9 +58,32 @@ export function OrganizationSettingsForm({
           readOnly
         />
       </label>
+      <label className="block text-sm font-semibold">
+        Default revenue currency
+        <input
+          className={inputClassName.replace(
+            "bg-slate-50",
+            canEdit ? "bg-white" : "bg-slate-50",
+          )}
+          type="text"
+          name="defaultRevenueCurrencyCode"
+          defaultValue={defaultRevenueCurrencyCode ?? ""}
+          maxLength={3}
+          placeholder="EUR"
+          readOnly={!canEdit}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
       <p className="text-sm text-[var(--muted)]">
-        De slug is in deze fase vast, zodat bestaande links niet breken.
+        Prefills the manual Won-revenue form. Each stored amount keeps its own
+        currency. Leave empty for no default — LeadGuard does not assume EUR.
       </p>
+      {state.fieldErrors?.defaultRevenueCurrencyCode ? (
+        <p className="text-sm text-red-700">
+          {state.fieldErrors.defaultRevenueCurrencyCode[0]}
+        </p>
+      ) : null}
       <p className="text-sm">
         Jouw rol: <strong>{role}</strong>
       </p>

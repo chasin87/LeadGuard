@@ -40,6 +40,9 @@ export default async function OrganizationSettingsPage({
             organizationSlug={context.organization.slug}
             name={context.organization.name}
             slug={context.organization.slug}
+            defaultRevenueCurrencyCode={
+              context.organization.defaultRevenueCurrencyCode
+            }
             role={context.membership.role}
             canEdit={canEdit}
           />
@@ -58,7 +61,15 @@ export default async function OrganizationSettingsPage({
       <p className="mt-3">
         <Link
           className="font-semibold text-[#19d0a2] hover:underline"
-          href={`/app/${context.organization.slug}/integrations/google-ads`}
+          href={`/app/${context.organization.slug}/settings/billing`}
+        >
+          Billing
+        </Link>
+      </p>
+      <p className="mt-3">
+        <Link
+          className="font-semibold text-[#19d0a2] hover:underline"
+          href={`/app/${context.organization.slug}/integrations`}
         >
           Integrations
         </Link>

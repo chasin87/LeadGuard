@@ -8,7 +8,9 @@ import {
 } from "@/server/receipts/service";
 import { createFormSubmissionId } from "@/server/monitoring/form/submission-id";
 
-config({ path: ".env" });
+if (!process.env.DATABASE_URL) {
+  config({ path: process.env.E2E_ENV_FILE ?? ".env" });
+}
 
 async function main() {
   const monitorId = process.argv[2];
@@ -39,7 +41,7 @@ async function main() {
   const attempt = await database.formSubmissionAttempt.create({
     data: {
       monitorId: monitor.id,
-      jobId: `e2e-receipt-${submissionId}`,
+      jobId: `e2e-receipt-${process.env.E2E_RUN_ID ?? "local"}-${submissionId}`,
       submissionId,
       state: "CONFIRMED",
     },

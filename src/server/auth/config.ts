@@ -1,10 +1,14 @@
 import type { NextAuthConfig } from "next-auth";
 
-const protectedPrefixes = ["/app", "/onboarding"];
+const protectedPrefixes = ["/app", "/onboarding", "/platform-admin"];
 const authPages = new Set(["/login", "/register"]);
+
+const authOrigin = (process.env.AUTH_URL ?? process.env.APP_URL ?? "").trim();
+const useSecureCookies = authOrigin.startsWith("https://");
 
 export const authConfig = {
   trustHost: true,
+  useSecureCookies,
   secret: process.env.AUTH_SECRET,
   pages: {
     signIn: "/login",

@@ -87,6 +87,7 @@ Jobs gaan naar `integration.google_ads.incident_impact` met payload `{ incidentI
 ## Known limitations
 
 - Geen revenue loss, conversions, ROAS of lead value
+- Fase 13 visitor-attribution (GCLID-capture) is een aparte keten; impact claimt geen click→lead relatie
 - Landing-page reporting is dagelijks, niet hourly
 - Hourly source attribution is estimated bij gedeeltelijke uren
 - Ads met meerdere final URLs en PMax Final URL Expansion blijven ambiguous

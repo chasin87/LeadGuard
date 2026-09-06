@@ -51,6 +51,7 @@ export async function findUserForCredentials(email: string): Promise<{
   name: string;
   email: string;
   passwordHash: string | null;
+  status: "ACTIVE" | "DISABLED";
 } | null> {
   return database.user.findUnique({
     where: { email: normalizeEmail(email) },
@@ -59,6 +60,7 @@ export async function findUserForCredentials(email: string): Promise<{
       name: true,
       email: true,
       passwordHash: true,
+      status: true,
     },
   });
 }

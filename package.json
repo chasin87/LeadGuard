@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "dev:all": "tsx scripts/dev-all.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
@@ -15,7 +16,9 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "tsx scripts/e2e-clean.ts",
+    "e2e:clean": "tsx scripts/e2e-clean.ts",
+    "e2e:services": "tsx scripts/e2e-webserver.ts",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate deploy",
@@ -25,7 +28,9 @@
     "worker:browser": "tsx --env-file=.env src/workers/run-browser-worker.ts",
     "worker:notifications": "tsx --env-file=.env src/workers/run-notification-worker.ts",
     "worker:google-ads": "tsx --env-file=.env src/workers/run-google-ads-worker.ts",
-    "scheduler": "tsx --env-file=.env src/workers/run-scheduler.ts"
+    "scheduler": "tsx --env-file=.env src/workers/run-scheduler.ts",
+    "launch:check": "tsx --env-file=.env scripts/launch-readiness.ts",
+    "platform-admin:grant": "tsx --env-file=.env scripts/platform-admin-grant.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.0",
@@ -43,6 +48,7 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "server-only": "^0.0.1",
+    "stripe": "^22.6.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

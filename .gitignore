@@ -13,6 +13,7 @@
 # local configuration and secrets
 .env
 .env.local
+.env.e2e
 .env.*.local
 !.env.example
 

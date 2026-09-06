@@ -811,7 +811,9 @@ function contextOptions(viewport: FormMonitorRuntimeConfig["viewport"]) {
     isMobile: preset.isMobile,
     hasTouch: preset.hasTouch,
     locale: "en-US",
-    extraHTTPHeaders: {},
+    extraHTTPHeaders: {
+      "X-LeadGuard-Monitor": "1",
+    },
   };
 }
 

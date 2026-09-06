@@ -11,12 +11,21 @@ import {
 } from "@/server/google-ads/clients";
 import { encryptSecret } from "@/server/google-ads/encryption";
 import { googleAdsUserErrors } from "@/server/google-ads/errors";
+import {
+  hasScope,
+  joinScopes,
+  parseGrantedScopes,
+  requestedScopesForIntent,
+  type GoogleOAuthIntent,
+} from "@/server/google-ads/scopes";
+import { googleDataManagerOAuthScope } from "@/server/google-data-manager/config";
 
 const logger = createLogger("google-ads");
 
 export async function startGoogleAdsOAuth(input: {
   userId: string;
   organizationSlug: string;
+  intent?: GoogleOAuthIntent;
 }): Promise<string> {
   const access = await requireOrganizationRole(
     input.userId,
@@ -31,6 +40,8 @@ export async function startGoogleAdsOAuth(input: {
     throw new DomainError(googleAdsUserErrors.platformConfig);
   }
 
+  const intent: GoogleOAuthIntent = input.intent ?? "connect";
+  const scopes = requestedScopesForIntent(intent);
   const state = generateOAuthState();
   const expiresAt = new Date(Date.now() + config.oauthStateTtlSeconds * 1000);
   await database.googleAdsOAuthState.create({
@@ -38,17 +49,23 @@ export async function startGoogleAdsOAuth(input: {
       stateHash: hashOAuthState(state),
       organizationId: access.organization.id,
       userId: input.userId,
+      intent,
+      requestedScopes: joinScopes(scopes),
       expiresAt,
     },
   });
   logger.info("google_ads.oauth.started", {
     organizationId: access.organization.id,
     userId: input.userId,
+    intent,
   });
   return getGoogleAdsAuthClient().createAuthorizationUrl({
     state,
     redirectUri: config.redirectUri,
     clientId: config.clientId || "fake-client-id",
+    scopes,
+    includeGrantedScopes: intent === "data_manager",
+    intent,
   });
 }
 
@@ -124,10 +141,19 @@ export async function completeGoogleAdsOAuth(input: {
     throw new DomainError(googleAdsUserErrors.missingOfflineAccess);
   }
 
+  const grantedScopes = tokens.scope ?? pending.requestedScopes;
+  const granted = parseGrantedScopes(grantedScopes);
+  const hasDataManager = hasScope(granted, googleDataManagerOAuthScope);
   const encrypted = encryptSecret(tokens.refreshToken);
   const existing = await database.googleAdsConnection.findUnique({
     where: { organizationId: access.organization.id },
   });
+  const dataManagerStatus = hasDataManager
+    ? "READY"
+    : existing?.dataManagerStatus === "READY" ||
+        pending.intent === "data_manager"
+      ? "REAUTH_REQUIRED"
+      : "NOT_CONFIGURED";
   const connection = existing
     ? await database.googleAdsConnection.update({
         where: { id: existing.id },
@@ -136,6 +162,8 @@ export async function completeGoogleAdsOAuth(input: {
           encryptedRefreshToken: encrypted.ciphertext,
           credentialVersion: encrypted.version,
           googleAccountEmail: tokens.email,
+          grantedScopes,
+          dataManagerStatus,
           lastSyncErrorCode: null,
         },
       })
@@ -146,14 +174,28 @@ export async function completeGoogleAdsOAuth(input: {
           encryptedRefreshToken: encrypted.ciphertext,
           credentialVersion: encrypted.version,
           googleAccountEmail: tokens.email,
+          grantedScopes,
+          dataManagerStatus,
         },
       });
+
+  if (existing && dataManagerStatus !== "READY") {
+    await database.googleAdsConversionFeedbackConfig.updateMany({
+      where: {
+        googleAdsConnectionId: connection.id,
+        status: { in: ["ACTIVE", "READY"] },
+      },
+      data: { status: "NEEDS_REAUTH" },
+    });
+  }
 
   logger.info("google_ads.connected", {
     organizationId: access.organization.id,
     connectionId: connection.id,
     userId: input.userId,
     reconnect: Boolean(existing),
+    intent: pending.intent,
+    dataManagerReady: dataManagerStatus === "READY",
   });
   return { organizationSlug: access.organization.slug };
 }

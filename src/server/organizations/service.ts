@@ -17,6 +17,7 @@ import {
   randomSlugSuffix,
   slugifyOrganizationName,
 } from "@/server/organizations/slug";
+import { startOrganizationTrial } from "@/server/billing/service";
 
 export async function allocateUniqueSlug(
   name: string,
@@ -54,7 +55,7 @@ export async function createOrganizationWithOwner(input: {
   const name = input.name.trim();
 
   try {
-    return await database.$transaction(async (tx) => {
+    const created = await database.$transaction(async (tx) => {
       const slug = await allocateUniqueSlug(name, tx);
       const organization = await tx.organization.create({
         data: {
@@ -71,6 +72,7 @@ export async function createOrganizationWithOwner(input: {
           id: true,
           name: true,
           slug: true,
+          defaultRevenueCurrencyCode: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -83,6 +85,11 @@ export async function createOrganizationWithOwner(input: {
 
       return organization;
     });
+    await startOrganizationTrial({
+      organizationId: created.id,
+      ownerUserId: input.userId,
+    });
+    return created;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -114,6 +121,35 @@ export async function updateOrganizationName(
       id: true,
       name: true,
       slug: true,
+      defaultRevenueCurrencyCode: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+}
+
+export async function updateOrganizationSettings(
+  userId: string,
+  organizationSlug: string,
+  input: { name: string; defaultRevenueCurrencyCode: string | null },
+): Promise<OrganizationSummary> {
+  const context = await requireOrganizationRole(
+    userId,
+    organizationSlug,
+    "organization:update",
+  );
+
+  return database.organization.update({
+    where: { id: context.organization.id },
+    data: {
+      name: input.name.trim(),
+      defaultRevenueCurrencyCode: input.defaultRevenueCurrencyCode,
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      defaultRevenueCurrencyCode: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -137,6 +173,7 @@ export async function getOrganizationByIdForMember(
       id: true,
       name: true,
       slug: true,
+      defaultRevenueCurrencyCode: true,
       createdAt: true,
       updatedAt: true,
     },

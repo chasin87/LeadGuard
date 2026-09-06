@@ -12,6 +12,26 @@ import { timeoutDueReceiptVerifications } from "@/server/receipts/service";
 import { claimDueGoogleAdsCustomers } from "@/server/google-ads/sync";
 import { claimDueGoogleAdsImpacts } from "@/server/google-ads/impact/refresh";
 import { enqueueGoogleAdsImpact, enqueueGoogleAdsSync } from "@/jobs/queue";
+import {
+  enqueueGoogleAdsAnalyticsSync,
+  enqueueGoogleAdsClickResolution,
+} from "@/jobs/queue";
+import { claimDueAnalyticsCustomers } from "@/server/google-ads/analytics-config";
+import { claimDueClickResolutions } from "@/server/google-ads/click-resolution";
+import { claimDueConversionExports } from "@/server/google-ads/conversion-export";
+import {
+  enqueueGoogleConversionStatus,
+  enqueueGoogleConversionSubmit,
+} from "@/jobs/queue";
+import {
+  cleanupExpiredTrackingData,
+  finalizePendingAttributions,
+} from "@/server/tracking/service";
+import { cleanupExpiredOutcomeImports } from "@/server/outcomes/import-service";
+import { billingAllowsMonitoringSql } from "@/server/billing/access";
+import { reconcileBillingSubscriptions } from "@/server/billing/projection";
+import { getBillingConfig } from "@/server/billing/config";
+import { recordWorkerHeartbeat } from "@/server/ops/heartbeat";
 
 const logger = createLogger("scheduler");
 
@@ -43,6 +63,7 @@ export async function claimDueMonitors(
         AND m."deletedAt" IS NULL
         AND w.status = 'ACTIVE'
         AND m."nextCheckAt" <= ${now}
+        ${billingAllowsMonitoringSql(now)}
         AND (
           m.type <> 'FORM'
           OR EXISTS (
@@ -153,5 +174,94 @@ export async function scheduleDueMonitors(now = new Date()): Promise<number> {
       message: error instanceof Error ? error.message : "unknown",
     });
   }
+  try {
+    const dueExports = await claimDueConversionExports(now);
+    for (const row of dueExports.submitDue) {
+      const jobId = await enqueueGoogleConversionSubmit(row.id);
+      if (jobId) enqueued += 1;
+    }
+    for (const row of dueExports.statusDue) {
+      const jobId = await enqueueGoogleConversionStatus(row.id);
+      if (jobId) enqueued += 1;
+    }
+  } catch (error) {
+    logger.error("scheduler.google_conversion_enqueue_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+  try {
+    const dueAnalytics = await claimDueAnalyticsCustomers(now);
+    for (const row of dueAnalytics) {
+      const jobId = await enqueueGoogleAdsAnalyticsSync({
+        googleAdsCustomerId: row.googleAdsCustomerId,
+        organizationId: row.organizationId,
+        kind: "RECENT",
+      });
+      if (jobId) enqueued += 1;
+    }
+  } catch (error) {
+    logger.error("scheduler.google_ads_analytics_enqueue_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+  try {
+    const dueClicks = await claimDueClickResolutions(now);
+    for (const row of dueClicks) {
+      const jobId = await enqueueGoogleAdsClickResolution(row);
+      if (jobId) enqueued += 1;
+    }
+  } catch (error) {
+    logger.error("scheduler.google_ads_click_enqueue_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+  await cleanupExpiredTrackingData(now).catch((error: unknown) => {
+    logger.warn("scheduler.tracking_cleanup_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  });
+  await finalizePendingAttributions(now).catch((error: unknown) => {
+    logger.warn("scheduler.tracking_reconcile_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  });
+  await cleanupExpiredOutcomeImports(now).catch((error: unknown) => {
+    logger.warn("scheduler.outcome_import_cleanup_failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  });
+  const billingConfig = getBillingConfig();
+  const dueReconcile = await database.billingSubscription.findFirst({
+    where: {
+      provider: { in: ["STRIPE", "FAKE"] },
+      OR: [
+        { lastReconciledAt: null },
+        {
+          lastReconciledAt: {
+            lte: new Date(
+              now.getTime() - billingConfig.reconcileIntervalSeconds * 1000,
+            ),
+          },
+        },
+        {
+          status: "PAST_DUE",
+          graceDeadlineAt: { lte: now },
+        },
+        {
+          status: "TRIALING",
+          trialEnd: { lte: now },
+        },
+      ],
+    },
+    select: { id: true },
+  });
+  if (dueReconcile) {
+    await reconcileBillingSubscriptions(now).catch((error: unknown) => {
+      logger.warn("scheduler.billing_reconcile_failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+  }
+  await recordWorkerHeartbeat("SCHEDULER").catch(() => undefined);
   return enqueued;
 }

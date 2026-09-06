@@ -44,7 +44,23 @@ export function resolveCredentialEncryptionKey(
         "CREDENTIAL_ENCRYPTION_KEY must be 32 bytes as hex or base64.",
       );
     }
+    if (
+      process.env.NODE_ENV === "production" &&
+      process.env.E2E_RUNTIME !== "true" &&
+      configured.includes("leadguard-dev-only")
+    ) {
+      throw new DomainError(
+        "CREDENTIAL_ENCRYPTION_KEY must not use the development fallback in production.",
+      );
+    }
     return decoded;
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.E2E_RUNTIME !== "true"
+  ) {
+    throw new DomainError("LeadGuard is missing CREDENTIAL_ENCRYPTION_KEY.");
   }
 
   if (getGoogleAdsProviderKind() === "fake") {

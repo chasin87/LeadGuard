@@ -41,6 +41,10 @@ export const googleAdsUserErrors = {
     "That Google Ads account is not available for this connection.",
   impactCooldown: "Wait a minute before refreshing impact again.",
   impactNotFound: "Google Ads impact is not available for this incident.",
+  analyticsCooldown:
+    "Wait a minute before refreshing Google Ads analytics again.",
+  analyticsBackfillCooldown:
+    "A performance backfill recently ran for this account. Try again later.",
 } as const;
 
 export function userFacingGoogleAdsError(error: unknown): string {

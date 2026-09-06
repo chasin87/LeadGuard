@@ -8,11 +8,12 @@ import {
   updateOrganizationSchema,
 } from "@/lib/validation/organization";
 import { DomainError } from "@/server/authorization/errors";
+import { canonicalizeCurrencyCode } from "@/lib/money";
 import { requireUser } from "@/server/authorization/session";
 import {
   changeOrganizationMemberRole,
   createOrganizationWithOwner,
-  updateOrganizationName,
+  updateOrganizationSettings,
 } from "@/server/organizations/service";
 
 export type OrganizationFormState = {
@@ -55,6 +56,7 @@ export async function updateOrganizationAction(
   const user = await requireUser();
   const parsed = updateOrganizationSchema.safeParse({
     name: formData.get("name"),
+    defaultRevenueCurrencyCode: formData.get("defaultRevenueCurrencyCode"),
   });
 
   if (!parsed.success) {
@@ -62,7 +64,21 @@ export async function updateOrganizationAction(
   }
 
   try {
-    await updateOrganizationName(user.id, organizationSlug, parsed.data.name);
+    const rawCurrency = parsed.data.defaultRevenueCurrencyCode ?? "";
+    const currency = rawCurrency ? canonicalizeCurrencyCode(rawCurrency) : null;
+    if (rawCurrency && !currency) {
+      return {
+        fieldErrors: {
+          defaultRevenueCurrencyCode: [
+            "Gebruik een ISO 4217-valutacode, bijvoorbeeld EUR.",
+          ],
+        },
+      };
+    }
+    await updateOrganizationSettings(user.id, organizationSlug, {
+      name: parsed.data.name,
+      defaultRevenueCurrencyCode: currency,
+    });
     revalidatePath(`/app/${organizationSlug}/settings`);
     return {};
   } catch (error) {

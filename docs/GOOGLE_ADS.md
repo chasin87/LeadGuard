@@ -53,7 +53,7 @@ Zelfs bij HTTP 404 blijft Google Ads ongewijzigd.
 
 OWNER/ADMIN start connect via Settings → Integrations → Google Ads.
 
-- Scope: uitsluitend `https://www.googleapis.com/auth/adwords`
+- Scope: `https://www.googleapis.com/auth/adwords` voor destination monitoring. Conversion feedback vraagt extra `https://www.googleapis.com/auth/datamanager` via een expliciete reconnect. Granted scopes worden opgeslagen; bestaande Ads-tokens krijgen Data Manager niet stil.
 - `access_type=offline` en `prompt=consent` voor een refresh token
 - State: 32 random bytes, SHA-256 in de database, expiry 10 minuten, single-use, gebonden aan organization + initiating user
 - Callback (`/api/integrations/google-ads/callback`) controleert membership opnieuw (`integrations:manage`)
@@ -126,4 +126,4 @@ Zie [Google Ads incident impact](GOOGLE_ADS_INCIDENT_IMPACT.md). Spend-at-risk h
 
 ## Google Ads API policy (relevant)
 
-LeadGuard slaat alleen destination- en sourcecontext op die nodig is voor health monitoring. Geen audiences, search terms, conversion uploads of user lists. OAuth-tokens worden encrypted bewaard voor offline sync namens de autoriserende user. Zie de actuele [Google Ads API-documentatie](https://developers.google.com/google-ads/api/docs/start) voor developer-token- en data-use regels.
+LeadGuard slaat alleen destination- en sourcecontext op die nodig is voor health monitoring. Campaign/ad/budget mutate, audiences en user lists blijven verboden. Conversion writes gaan uitsluitend via Data Manager `events.ingest` wanneer OWNER/ADMIN conversion feedback expliciet activeert. Analytics sync en ClickView zijn extra **read-only** GAQL (`customer`/`campaign` daily + `click_view`). Zie [conversion feedback](GOOGLE_ADS_CONVERSION_FEEDBACK.md), [revenue analytics](REVENUE_ANALYTICS.md) en [click attribution](GOOGLE_ADS_CLICK_ATTRIBUTION.md).

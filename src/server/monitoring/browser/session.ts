@@ -79,12 +79,17 @@ export async function withIsolatedContext<T>(
   }
   const context = await browser.newContext({
     ...options,
+    extraHTTPHeaders: {
+      "X-LeadGuard-Monitor": "1",
+      ...options?.extraHTTPHeaders,
+    },
     acceptDownloads: false,
     bypassCSP: false,
     javaScriptEnabled: true,
     serviceWorkers: "block",
     permissions: [],
   });
+  await context.addInitScript("window.__LEADGUARD_MONITORING__ = true;");
   try {
     return await fn(context);
   } finally {

@@ -57,6 +57,14 @@ export function LoginForm() {
         {pending ? "Bezig met inloggen…" : "Inloggen"}
       </button>
       <p className="text-center text-sm text-[var(--muted)]">
+        <Link
+          className="font-semibold text-[#19d0a2] hover:underline"
+          href="/forgot-password"
+        >
+          Wachtwoord vergeten?
+        </Link>
+      </p>
+      <p className="text-center text-sm text-[var(--muted)]">
         Nog geen account?{" "}
         <Link
           className="font-semibold text-[#19d0a2] hover:underline"

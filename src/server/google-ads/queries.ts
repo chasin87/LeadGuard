@@ -132,4 +132,92 @@ FROM expanded_landing_page_view
 WHERE segments.date BETWEEN '${fromDate}' AND '${toDate}'
 `.trim();
   },
+  conversionActions: `
+SELECT
+  conversion_action.id,
+  conversion_action.name,
+  conversion_action.status,
+  conversion_action.type,
+  conversion_action.category,
+  conversion_action.counting_type,
+  conversion_action.click_through_lookback_window_days
+FROM conversion_action
+WHERE conversion_action.status != 'REMOVED'
+`.trim(),
+  customerDailyPerformance(fromDate: string, toDate: string): string {
+    assertReportingDate(fromDate);
+    assertReportingDate(toDate);
+    return `
+SELECT
+  customer.id,
+  segments.date,
+  metrics.cost_micros,
+  metrics.clicks,
+  metrics.impressions
+FROM customer
+WHERE segments.date BETWEEN '${fromDate}' AND '${toDate}'
+`.trim();
+  },
+  campaignDailyPerformance(fromDate: string, toDate: string): string {
+    assertReportingDate(fromDate);
+    assertReportingDate(toDate);
+    return `
+SELECT
+  campaign.id,
+  campaign.name,
+  campaign.status,
+  campaign.advertising_channel_type,
+  segments.date,
+  metrics.cost_micros,
+  metrics.clicks,
+  metrics.impressions
+FROM campaign
+WHERE segments.date BETWEEN '${fromDate}' AND '${toDate}'
+`.trim();
+  },
+  clickViews(date: string, gclids: string[]): string {
+    assertReportingDate(date);
+    const quoted = gclids.map(quoteGaqlGclid);
+    if (quoted.length === 0) {
+      throw new Error("ClickView requires at least one GCLID.");
+    }
+    return `
+SELECT
+  click_view.gclid,
+  click_view.ad_group_ad,
+  click_view.keyword,
+  click_view.keyword_info.text,
+  click_view.keyword_info.match_type,
+  campaign.id,
+  campaign.name,
+  campaign.status,
+  campaign.advertising_channel_type,
+  ad_group.id,
+  ad_group.name,
+  segments.date
+FROM click_view
+WHERE segments.date = '${date}'
+  AND click_view.gclid IN (${quoted.join(", ")})
+`.trim();
+  },
 } as const;
+
+const REPORTING_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const SAFE_GCLID = /^[A-Za-z0-9._-]+$/;
+
+export function assertReportingDate(value: string): void {
+  if (!REPORTING_DATE.test(value)) {
+    throw new Error("Invalid Google Ads reporting date.");
+  }
+}
+
+function quoteGaqlGclid(value: string): string {
+  if (!SAFE_GCLID.test(value) || value.length > 200) {
+    throw new Error("Invalid GCLID for ClickView.");
+  }
+  return `'${value}'`;
+}
+
+export function isSafeGaqlGclid(value: string): boolean {
+  return SAFE_GCLID.test(value) && value.length > 0 && value.length <= 200;
+}

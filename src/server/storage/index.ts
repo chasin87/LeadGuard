@@ -16,6 +16,15 @@ export function resetArtifactStorageForTests(): void {
 
 function createArtifactStorage(): ArtifactStorage {
   const driver = (process.env.ARTIFACT_STORAGE_DRIVER ?? "local").toLowerCase();
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.E2E_RUNTIME !== "true" &&
+    driver !== "s3"
+  ) {
+    throw new Error(
+      "ARTIFACT_STORAGE_DRIVER=s3 is required in production. Local artifact storage is not allowed.",
+    );
+  }
   if (driver === "s3") {
     const endpoint = required("S3_ENDPOINT");
     const bucket = required("S3_BUCKET");

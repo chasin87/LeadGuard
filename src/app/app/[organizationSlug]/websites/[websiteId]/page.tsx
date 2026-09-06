@@ -12,6 +12,7 @@ import { MonitorHealthBadge } from "@/components/monitor-health-badge";
 import { WebsiteNotFoundError } from "@/server/security/errors";
 import { listMonitors } from "@/server/monitors/service";
 import { getWebsite } from "@/server/websites/service";
+import { database } from "@/server/database";
 import {
   deriveMonitorHealth,
   deriveWebsiteHealth,
@@ -24,6 +25,8 @@ import {
   monitorTypeLabel,
 } from "@/lib/monitoring/display";
 import { formatDuration, incidentDurationMs } from "@/lib/incidents/duration";
+import { WebsiteTrackingSetup } from "@/components/website-tracking-setup";
+import { trackingSdkUrl } from "@/server/tracking/config";
 
 export const metadata = { title: "Website" };
 
@@ -58,6 +61,9 @@ export default async function WebsiteDetailPage({
   }
 
   const monitors = await listMonitors(user.id, organizationSlug, websiteId);
+  const tracking = await database.websiteTrackingConfig.findUnique({
+    where: { websiteId: website.id },
+  });
   const monitorHealths = monitors.map((monitor) =>
     deriveMonitorHealth({
       latestCheck: monitor.latestCheck,
@@ -136,6 +142,41 @@ export default async function WebsiteDetailPage({
           <WebsiteDnsNote status={website.dnsStatus} />
         </div>
       </section>
+
+      <WebsiteTrackingSetup
+        organizationSlug={organizationSlug}
+        websiteId={website.id}
+        status={
+          tracking?.status === "ENABLED"
+            ? "ENABLED"
+            : tracking
+              ? "DISABLED"
+              : "NOT_CONFIGURED"
+        }
+        siteKey={tracking?.publicSiteKey ?? null}
+        lastEventLabel={
+          tracking?.lastEventReceivedAt
+            ? formatRelativeTime(tracking.lastEventReceivedAt)
+            : "No events yet"
+        }
+        lastAttributionLabel={
+          tracking?.lastAttributionReceivedAt
+            ? formatRelativeTime(tracking.lastAttributionReceivedAt)
+            : "No Google click yet"
+        }
+        lastLeadLabel={
+          tracking?.lastLeadReceivedAt
+            ? formatRelativeTime(tracking.lastLeadReceivedAt)
+            : "No leads yet"
+        }
+        snippet={`<script
+  defer
+  src="${trackingSdkUrl()}"
+  data-site-key="${tracking?.publicSiteKey ?? "lg_site_..."}"
+></script>`}
+        consentSnippet={`LeadGuard.setConsent({ attribution: "granted" })`}
+        canManage={canManage}
+      />
 
       <section className="mt-8 max-w-3xl rounded-2xl border border-[var(--border)] bg-white p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
